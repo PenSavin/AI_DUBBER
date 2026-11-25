@@ -20,7 +20,7 @@ import stat
 import numpy as np
 from pathlib import Path
 from urllib.parse import quote, unquote, urlparse
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Literal
 
 from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -29,6 +29,8 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from publisher import router as publisher_router
+from job_manager import JobConflict, JobNotFound, PersistentJobManager
+from movie_splitter import build_split_plan, run_movie_split_job
 
 # Compatibility patch: PyAV 14+ / 19+ dropped 'metadata_errors' parameter in av.open(),
 # which faster-whisper still passes. This patch safely removes it to avoid TypeError.
@@ -52,6 +54,7 @@ RESOURCE_DIR = Path(getattr(sys, "_MEIPASS", APP_ROOT)) if IS_FROZEN else BACKEN
 UPLOADS_DIR = DATA_DIR / "uploads"
 OUTPUTS_DIR = DATA_DIR / "outputs"
 AUDIO_SEGMENTS_DIR = DATA_DIR / "audio_segments"
+JOB_DATABASE_PATH = DATA_DIR / "ai_dubber_jobs.sqlite3"
 STATIC_DIR = RESOURCE_DIR / "static"
 
 for folder in [UPLOADS_DIR, OUTPUTS_DIR, AUDIO_SEGMENTS_DIR, STATIC_DIR]:
@@ -78,6 +81,7 @@ app = FastAPI(
     description="Backend for AI Video Transcription, Translation, and Dubbing in Khmer",
     version="1.0.0"
 )
+job_manager = PersistentJobManager(JOB_DATABASE_PATH, max_workers=1, max_pending=20)
 app.include_router(publisher_router)
 
 # CORS is only needed for the Angular development server. The packaged app is
@@ -172,6 +176,11 @@ class AutoEditRequest(BaseModel):
 
 class DownloadUrlRequest(BaseModel):
     url: str
+
+class MovieSplitRequest(BaseModel):
+    video_filename: str
+    segment_seconds: float = Field(ge=15, le=3600)
+    mode: Literal["accurate", "copy"] = "accurate"
 
 class DetectSpeakersRequest(BaseModel):
     video_filename: str
@@ -560,6 +569,31 @@ def get_whisper_instance():
 
 # --- API Routes ---
 
+def process_movie_split_job(payload: dict, context):
+    try:
+        source_path = resolve_video_path(str(payload.get("video_filename", "")))
+    except HTTPException as error:
+        raise RuntimeError(error.detail) from error
+    if not video_has_video_stream(source_path):
+        raise RuntimeError("The selected source no longer contains a readable video stream.")
+    return run_movie_split_job(
+        source_path=source_path,
+        payload=payload,
+        context=context,
+        ffmpeg_binary=get_ffmpeg_binary(),
+        outputs_dir=OUTPUTS_DIR,
+    )
+
+
+@app.on_event("startup")
+async def start_local_job_service():
+    job_manager.start({"movie_split": process_movie_split_job})
+
+
+@app.on_event("shutdown")
+async def stop_local_job_service():
+    await asyncio.to_thread(job_manager.shutdown)
+
 @app.get("/")
 async def serve_index():
     """Serves the Angular UI when built, with the legacy page as a fallback."""
@@ -589,6 +623,74 @@ async def health_check():
         "storage_free_bytes": free_bytes,
         "storage_writable": os.access(UPLOADS_DIR, os.W_OK) and os.access(OUTPUTS_DIR, os.W_OK),
     }
+
+
+@app.post("/api/split-jobs")
+async def create_movie_split_job(request: MovieSplitRequest):
+    try:
+        source_path = resolve_video_path(request.video_filename)
+    except HTTPException:
+        raise
+    if not await asyncio.to_thread(video_has_video_stream, source_path):
+        raise HTTPException(status_code=400, detail="The selected file does not contain a readable video stream.")
+    duration = await asyncio.to_thread(get_video_duration, source_path)
+    try:
+        plan = build_split_plan(duration, request.segment_seconds)
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error
+    if len(plan) > 2000:
+        raise HTTPException(status_code=400, detail="This split would create more than 2,000 parts. Increase the part duration.")
+    payload = {
+        "video_filename": source_path.name,
+        "source_duration_seconds": duration,
+        "segment_seconds": float(request.segment_seconds),
+        "mode": request.mode,
+    }
+    try:
+        return job_manager.create_job(
+            "movie_split",
+            payload,
+            message=f"Waiting to split into {len(plan)} parts.",
+        )
+    except JobConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+
+
+@app.get("/api/jobs")
+async def list_local_jobs(kind: Optional[str] = None, limit: int = 50):
+    return {"jobs": job_manager.list_jobs(kind=kind, limit=limit)}
+
+
+@app.get("/api/jobs/{job_id}")
+async def get_local_job(job_id: str):
+    try:
+        return job_manager.get_job(job_id)
+    except JobNotFound as error:
+        raise HTTPException(status_code=404, detail="Job not found.") from error
+
+
+@app.post("/api/jobs/{job_id}/cancel")
+async def cancel_local_job(job_id: str):
+    try:
+        return job_manager.cancel_job(job_id)
+    except JobNotFound as error:
+        raise HTTPException(status_code=404, detail="Job not found.") from error
+    except JobConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+
+
+@app.post("/api/jobs/{job_id}/retry")
+async def retry_local_job(job_id: str):
+    try:
+        return job_manager.retry_job(job_id)
+    except JobNotFound as error:
+        raise HTTPException(status_code=404, detail="Job not found.") from error
+    except JobConflict as error:
+        raise HTTPException(status_code=409, detail=str(error)) from error
+    except RuntimeError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
 
 
 @app.post("/api/upload")

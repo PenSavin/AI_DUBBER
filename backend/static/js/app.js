@@ -69,6 +69,16 @@ const initializeDubbingApp = () => {
         })[character]);
     }
 
+    async function findStoredVideoUrl(filename) {
+        const encodedName = encodeURIComponent(String(filename || ""));
+        for (const root of ["/uploads", "/outputs"]) {
+            const candidate = `${root}/${encodedName}`;
+            const response = await fetch(candidate, { method: "HEAD", cache: "no-store" });
+            if (response.ok) return candidate;
+        }
+        throw new Error("Video file is not available on this server.");
+    }
+
     const state = {
         copyrightReview: defaultRightsReview(),
         speakerProfiles: defaultSpeakerProfiles(),
@@ -140,6 +150,29 @@ const initializeDubbingApp = () => {
     const autoReelProgress = document.getElementById("autoReelProgress");
     const autoReelResults = document.getElementById("autoReelResults");
     const autoReelResultList = document.getElementById("autoReelResultList");
+    const btnMovieSplitter = document.getElementById("btnMovieSplitter");
+    const movieSplitterModal = document.getElementById("movieSplitterModal");
+    const btnCloseMovieSplitter = document.getElementById("btnCloseMovieSplitter");
+    const btnCancelMovieSplitter = document.getElementById("btnCancelMovieSplitter");
+    const splitSourceLabel = document.getElementById("splitSourceLabel");
+    const splitDurationPreset = document.getElementById("splitDurationPreset");
+    const splitCustomSecondsWrap = document.getElementById("splitCustomSecondsWrap");
+    const splitCustomSeconds = document.getElementById("splitCustomSeconds");
+    const splitMode = document.getElementById("splitMode");
+    const splitPlanSummary = document.getElementById("splitPlanSummary");
+    const btnStartMovieSplit = document.getElementById("btnStartMovieSplit");
+    const splitJobProgress = document.getElementById("splitJobProgress");
+    const splitJobProgressLabel = document.getElementById("splitJobProgressLabel");
+    const splitJobProgressPercent = document.getElementById("splitJobProgressPercent");
+    const splitJobProgressBar = document.getElementById("splitJobProgressBar");
+    const btnCancelMovieSplit = document.getElementById("btnCancelMovieSplit");
+    const splitJobError = document.getElementById("splitJobError");
+    const splitJobsList = document.getElementById("splitJobsList");
+    const splitResults = document.getElementById("splitResults");
+    const splitResultsTitle = document.getElementById("splitResultsTitle");
+    const splitArchiveLink = document.getElementById("splitArchiveLink");
+    const splitPartsGrid = document.getElementById("splitPartsGrid");
+    const splitLoadMore = document.getElementById("splitLoadMore");
     const btnExportSrt = document.getElementById("btnExportSrt");
     const btnExportVtt = document.getElementById("btnExportVtt");
     const btnAddSegment = document.getElementById("btnAddSegment");
@@ -376,9 +409,7 @@ const initializeDubbingApp = () => {
                 lblCurrentFilename.textContent = state.currentVideoFilename;
                 enableButton(btnTranscribe);
                 try {
-                    const videoUrl = `/uploads/${encodeURIComponent(state.currentVideoFilename)}`;
-                    const videoCheck = await fetch(videoUrl, { method: "HEAD", cache: "no-store" });
-                    if (!videoCheck.ok) throw new Error(`Video file unavailable (${videoCheck.status}).`);
+                    const videoUrl = await findStoredVideoUrl(state.currentVideoFilename);
                     videoElement.src = videoUrl;
                     videoElement.controls = true;
                     videoEmptyPlaceholder.classList.add("hidden");
@@ -1820,6 +1851,330 @@ const initializeDubbingApp = () => {
         }
     });
 
+    // --- Persistent fixed-duration movie splitter ---
+    let splitJobPollTimer = null;
+    let selectedSplitJobId = null;
+    let splitPartsForDisplay = [];
+    let splitRenderedPartCount = 0;
+    const SPLIT_PARTS_PAGE_SIZE = 12;
+
+    async function fetchSplitApi(url, options = {}) {
+        const response = await fetch(url, options);
+        let data = {};
+        try { data = await response.json(); } catch (error) { /* Keep a readable fallback below. */ }
+        if (!response.ok) throw new Error(data.detail || `Request failed (${response.status}).`);
+        return data;
+    }
+
+    function selectedSplitDuration() {
+        return splitDurationPreset?.value === "custom"
+            ? Number(splitCustomSeconds?.value)
+            : Number(splitDurationPreset?.value);
+    }
+
+    function updateSplitPlanSummary() {
+        if (!splitDurationPreset || !splitPlanSummary) return;
+        const custom = splitDurationPreset.value === "custom";
+        splitCustomSecondsWrap?.classList.toggle("hidden", !custom);
+        const partSeconds = selectedSplitDuration();
+        const duration = Number(videoElement?.duration) > 0 ? Number(videoElement.duration) : Number(state.currentVideoDuration);
+        const validPart = Number.isFinite(partSeconds) && partSeconds >= 15 && partSeconds <= 3600;
+        const validDuration = Number.isFinite(duration) && duration > 0;
+        btnStartMovieSplit.disabled = !state.currentVideoFilename || !validPart;
+        if (!validPart) {
+            splitPlanSummary.textContent = "Enter a part length from 15 seconds to 60 minutes.";
+        } else if (validDuration) {
+            const partCount = Math.ceil(duration / partSeconds);
+            splitPlanSummary.textContent = `${formatTime(duration)} source · ${partCount.toLocaleString()} part(s) expected. ${splitMode?.value === "copy" ? "Fast stream copy cuts at keyframes, so actual part lengths may vary." : "Accurate mode re-encodes parts for cuts at the selected times."}`;
+            if (partCount > 2000) splitPlanSummary.textContent += " Increase the part length to stay under the 2,000-part limit.";
+            btnStartMovieSplit.disabled = !state.currentVideoFilename || partCount > 2000;
+        } else {
+            splitPlanSummary.textContent = "The source duration will be checked before the job is queued.";
+        }
+    }
+
+    function setSplitProgress(job) {
+        if (!job || !["queued", "running"].includes(job.status)) {
+            splitJobProgress?.classList.add("hidden");
+            return;
+        }
+        splitJobProgress?.classList.remove("hidden");
+        const percent = Math.min(100, Math.max(0, Number(job.progress) || 0));
+        splitJobProgressLabel.textContent = job.message || job.stage || "Working…";
+        splitJobProgressPercent.textContent = `${Math.round(percent)}%`;
+        splitJobProgressBar.style.width = `${percent}%`;
+        btnCancelMovieSplit.disabled = job.status !== "running" && job.status !== "queued";
+    }
+
+    function renderSplitResults(job) {
+        const result = job?.result;
+        if (!result || !Array.isArray(result.parts)) {
+            splitResults?.classList.add("hidden");
+            return;
+        }
+        splitResults.classList.remove("hidden");
+        splitResultsTitle.textContent = `${result.part_count} split part(s)`;
+        splitArchiveLink.href = `/outputs/${encodeURIComponent(result.archive_filename || "")}`;
+        splitArchiveLink.download = result.archive_filename || "movie_parts.zip";
+        splitPartsGrid.replaceChildren();
+        splitPartsForDisplay = result.parts;
+        splitRenderedPartCount = 0;
+        appendSplitPartCards(SPLIT_PARTS_PAGE_SIZE);
+        splitLoadMore.classList.toggle("hidden", splitRenderedPartCount >= splitPartsForDisplay.length);
+    }
+
+    function appendSplitPartCards(count) {
+        const nextCount = Math.min(splitPartsForDisplay.length, splitRenderedPartCount + count);
+        for (let index = splitRenderedPartCount; index < nextCount; index += 1) {
+            const part = splitPartsForDisplay[index];
+            const videoUrl = `/outputs/${encodeURIComponent(part.filename || "")}`;
+            const card = document.createElement("article");
+            card.className = "overflow-hidden rounded-lg border border-base-800 bg-base-850";
+            const video = document.createElement("video");
+            video.className = "aspect-video w-full bg-black object-contain";
+            video.controls = true;
+            video.preload = "none";
+            video.poster = `/outputs/${encodeURIComponent(part.thumbnail_filename || "")}`;
+            video.src = videoUrl;
+            video.setAttribute("aria-label", `Preview part ${part.part_number}`);
+            const body = document.createElement("div");
+            body.className = "space-y-2 p-2.5";
+            const title = document.createElement("p");
+            title.className = "truncate text-[11px] font-medium text-base-200";
+            title.textContent = `Part ${part.part_number} · ${part.filename}`;
+            const detail = document.createElement("p");
+            detail.className = "text-[10px] text-base-500";
+            detail.textContent = `Starts ${formatTime(part.start_seconds)} · ${Math.round(part.target_duration_seconds)} sec target`;
+            const actions = document.createElement("div");
+            actions.className = "flex flex-wrap gap-2";
+            const download = document.createElement("a");
+            download.href = videoUrl;
+            download.download = part.filename || `part_${part.part_number}.mp4`;
+            download.className = "rounded-md bg-base-100 px-2.5 py-1.5 text-[10px] font-semibold text-base-950 hover:bg-base-200";
+            download.textContent = "Download MP4";
+            const openEditor = document.createElement("button");
+            openEditor.type = "button";
+            openEditor.className = "rounded-md border border-base-700 px-2.5 py-1.5 text-[10px] font-medium text-base-200 hover:bg-base-800";
+            openEditor.textContent = "Open in editor";
+            openEditor.addEventListener("click", () => openSplitPartInEditor(part));
+            actions.append(download, openEditor);
+            body.append(title, detail, actions);
+            card.append(video, body);
+            splitPartsGrid.append(card);
+        }
+        splitRenderedPartCount = nextCount;
+        splitLoadMore.classList.toggle("hidden", splitRenderedPartCount >= splitPartsForDisplay.length);
+    }
+
+    function openSplitPartInEditor(part) {
+        const switchVideo = async () => {
+            state.currentVideoFile = null;
+            state.currentVideoFilename = part.filename;
+            state.currentVideoDuration = Number(part.target_duration_seconds) || 0;
+            state.backgroundAudioUrl = null;
+            state.backgroundAudioVideoFilename = "";
+            state.copyrightReview = defaultRightsReview();
+            state.segments = [];
+            resetHistory();
+            renderSegmentsTable();
+            renderTimelineTracks();
+            syncRightsReviewControls();
+            updateDialogueSeparationButton();
+            if (lblAudioStatus) lblAudioStatus.textContent = "Original audio";
+            lblCurrentFilename.textContent = part.filename;
+            videoElement.src = `/outputs/${encodeURIComponent(part.filename)}`;
+            videoElement.controls = true;
+            videoElement.onloadedmetadata = () => {
+                if (Number.isFinite(videoElement.duration) && videoElement.duration > 0) {
+                    state.currentVideoDuration = videoElement.duration;
+                    videoDurationBadge.textContent = `00:00 / ${formatTime(videoElement.duration)}`;
+                    scheduleAutosave();
+                }
+            };
+            videoElement.load();
+            videoEmptyPlaceholder?.classList.add("hidden");
+            videoDurationBadge.textContent = `00:00 / ${formatTime(state.currentVideoDuration)}`;
+            enableButton(btnTranscribe);
+            enableButton(btnRemoveVoice);
+            disableButton(btnTranslate);
+            disableButton(btnGenerateVoice);
+            disableButton(btnExportVideo);
+            if (btnExportSrt) disableButton(btnExportSrt);
+            if (btnExportVtt) disableButton(btnExportVtt);
+            const removeVoiceLabel = btnRemoveVoice.querySelector("span");
+            if (removeVoiceLabel) removeVoiceLabel.textContent = "Remove original voice";
+            markProjectClean();
+            scheduleAutosave();
+            updateSplitPlanSummary();
+            movieSplitterModal.classList.add("hidden");
+            stopSplitJobPolling();
+            setStatus("Video loaded", `Loaded ${part.filename}. Transcribe this part to edit its dialogue.`);
+            showToast(`Loaded part ${part.part_number} in the dubbing editor.`);
+        };
+
+        if (state.segments.length) {
+            showAppConfirm("Loading this part will replace the current segment edits in the workspace. Continue?", {
+                title: "Open split part",
+                confirmText: "Open part"
+            }).then(confirmed => { if (confirmed) switchVideo(); });
+        } else {
+            switchVideo();
+        }
+    }
+
+    async function refreshSplitJobs() {
+        if (!splitJobsList || movieSplitterModal?.classList.contains("hidden")) return;
+        try {
+            const data = await fetchSplitApi("/api/jobs?kind=movie_split&limit=30");
+            const jobs = Array.isArray(data.jobs) ? data.jobs : [];
+            splitJobsList.replaceChildren();
+            if (!jobs.length) {
+                const empty = document.createElement("li");
+                empty.className = "rounded-lg border border-base-800 bg-base-850 p-3 text-base-500";
+                empty.textContent = "No split jobs yet.";
+                splitJobsList.append(empty);
+            }
+            for (const job of jobs) {
+                const item = document.createElement("li");
+                item.className = "rounded-lg border border-base-800 bg-base-850 p-2.5";
+                const top = document.createElement("div");
+                top.className = "flex items-start justify-between gap-3";
+                const title = document.createElement("span");
+                title.className = "min-w-0 break-all font-medium text-base-200";
+                title.textContent = job.payload?.video_filename || "Movie split";
+                const status = document.createElement("span");
+                status.className = "shrink-0 text-base-400";
+                status.textContent = `${job.status} · ${Math.round(Number(job.progress) || 0)}%`;
+                top.append(title, status);
+                const message = document.createElement("p");
+                message.className = "mt-1 break-words text-base-500";
+                message.textContent = job.error || job.message || "";
+                const actions = document.createElement("div");
+                actions.className = "mt-2 flex flex-wrap gap-2";
+                const addAction = (label, handler, style = "") => {
+                    const button = document.createElement("button");
+                    button.type = "button";
+                    button.className = `rounded-md border border-base-700 px-2 py-1 text-[10px] text-base-200 hover:bg-base-800 ${style}`;
+                    button.textContent = label;
+                    button.addEventListener("click", handler);
+                    actions.append(button);
+                };
+                if (job.status === "completed") addAction("View parts", () => {
+                    selectedSplitJobId = job.id;
+                    renderSplitResults(job);
+                    setSplitProgress(job);
+                });
+                if (["queued", "running"].includes(job.status)) addAction("Track", () => {
+                    selectedSplitJobId = job.id;
+                    setSplitProgress(job);
+                });
+                if (["queued", "running"].includes(job.status)) addAction("Cancel", async () => {
+                    try { await fetchSplitApi(`/api/jobs/${encodeURIComponent(job.id)}/cancel`, { method: "POST" }); await refreshSplitJobs(); }
+                    catch (error) { showToast(error.message, "error"); }
+                });
+                if (["failed", "cancelled", "interrupted"].includes(job.status)) addAction("Retry", async () => {
+                    try {
+                        const retried = await fetchSplitApi(`/api/jobs/${encodeURIComponent(job.id)}/retry`, { method: "POST" });
+                        selectedSplitJobId = retried.id;
+                        setSplitProgress(retried);
+                        await refreshSplitJobs();
+                    } catch (error) { showToast(error.message, "error"); }
+                });
+                item.append(top, message);
+                if (actions.childElementCount) item.append(actions);
+                splitJobsList.append(item);
+            }
+            const selected = jobs.find(job => job.id === selectedSplitJobId);
+            if (!selectedSplitJobId && jobs.length) selectedSplitJobId = jobs[0].id;
+            const activeSelected = selected || jobs.find(job => job.id === selectedSplitJobId);
+            if (activeSelected) {
+                setSplitProgress(activeSelected);
+                if (activeSelected.status === "completed" && selectedSplitJobId === activeSelected.id && splitResults?.classList.contains("hidden")) renderSplitResults(activeSelected);
+                if (["failed", "cancelled", "interrupted"].includes(activeSelected.status)) {
+                    splitJobError.textContent = activeSelected.error || activeSelected.message || "This split job did not finish.";
+                    splitJobError.classList.remove("hidden");
+                }
+            }
+            if (!jobs.some(job => ["queued", "running"].includes(job.status))) stopSplitJobPolling();
+        } catch (error) {
+            splitJobError.textContent = error.message || "Could not load split jobs.";
+            splitJobError.classList.remove("hidden");
+        }
+    }
+
+    function startSplitJobPolling() {
+        stopSplitJobPolling();
+        refreshSplitJobs();
+        splitJobPollTimer = window.setInterval(refreshSplitJobs, 1200);
+    }
+
+    function stopSplitJobPolling() {
+        if (splitJobPollTimer) window.clearInterval(splitJobPollTimer);
+        splitJobPollTimer = null;
+    }
+
+    function openMovieSplitter() {
+        if (!state.currentVideoFilename) {
+            showToast("Load a video before splitting it.", "error");
+            return;
+        }
+        splitSourceLabel.textContent = `Source: ${state.currentVideoFilename}`;
+        splitJobError.classList.add("hidden");
+        splitJobProgress.classList.add("hidden");
+        splitResults.classList.add("hidden");
+        movieSplitterModal.classList.remove("hidden");
+        updateSplitPlanSummary();
+        startSplitJobPolling();
+        window.lucide?.createIcons();
+    }
+
+    if (btnMovieSplitter && movieSplitterModal) btnMovieSplitter.addEventListener("click", openMovieSplitter);
+    if (btnCloseMovieSplitter) btnCloseMovieSplitter.addEventListener("click", () => { movieSplitterModal.classList.add("hidden"); stopSplitJobPolling(); });
+    if (btnCancelMovieSplitter) btnCancelMovieSplitter.addEventListener("click", () => { movieSplitterModal.classList.add("hidden"); stopSplitJobPolling(); });
+    if (movieSplitterModal) movieSplitterModal.addEventListener("click", event => {
+        if (event.target === movieSplitterModal) { movieSplitterModal.classList.add("hidden"); stopSplitJobPolling(); }
+    });
+    splitDurationPreset?.addEventListener("change", updateSplitPlanSummary);
+    splitCustomSeconds?.addEventListener("input", updateSplitPlanSummary);
+    splitMode?.addEventListener("change", updateSplitPlanSummary);
+    splitLoadMore?.addEventListener("click", () => appendSplitPartCards(SPLIT_PARTS_PAGE_SIZE));
+    btnStartMovieSplit?.addEventListener("click", async () => {
+        const segmentSeconds = selectedSplitDuration();
+        if (!state.currentVideoFilename || !Number.isFinite(segmentSeconds) || segmentSeconds < 15 || segmentSeconds > 3600) {
+            updateSplitPlanSummary();
+            return;
+        }
+        btnStartMovieSplit.disabled = true;
+        splitJobError.classList.add("hidden");
+        try {
+            const job = await fetchSplitApi("/api/split-jobs", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ video_filename: state.currentVideoFilename, segment_seconds: segmentSeconds, mode: splitMode.value })
+            });
+            selectedSplitJobId = job.id;
+            setSplitProgress(job);
+            splitResults.classList.add("hidden");
+            startSplitJobPolling();
+        } catch (error) {
+            splitJobError.textContent = error.message || "Could not start the split job.";
+            splitJobError.classList.remove("hidden");
+        } finally {
+            updateSplitPlanSummary();
+        }
+    });
+    btnCancelMovieSplit?.addEventListener("click", async () => {
+        if (!selectedSplitJobId) return;
+        btnCancelMovieSplit.disabled = true;
+        try {
+            await fetchSplitApi(`/api/jobs/${encodeURIComponent(selectedSplitJobId)}/cancel`, { method: "POST" });
+            await refreshSplitJobs();
+        } catch (error) {
+            splitJobError.textContent = error.message || "Could not cancel the job.";
+            splitJobError.classList.remove("hidden");
+        }
+    });
+
     // --- Automatic vertical clip editing (/api/auto-edit) ---
     function closeAutoReelModal() {
         if (autoReelModal) autoReelModal.classList.add("hidden");
@@ -2417,7 +2772,8 @@ const initializeDubbingApp = () => {
             state.currentVideoFilename = data.video_filename;
             state.currentVideoFile = null;
             lblCurrentFilename.textContent = data.video_filename;
-            videoElement.src = `/uploads/${encodeURIComponent(data.video_filename)}`;
+            const videoRoot = String(data.video_filename).startsWith("split_") ? "/outputs" : "/uploads";
+            videoElement.src = `${videoRoot}/${encodeURIComponent(data.video_filename)}`;
             videoElement.controls = true;
             videoElement.load();
             enableButton(btnTranscribe);

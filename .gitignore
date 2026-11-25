@@ -11,6 +11,9 @@ dist/
 .env.*
 !.env.example
 publisher_data/
+ai_dubber_jobs.sqlite3
+ai_dubber_jobs.sqlite3-wal
+ai_dubber_jobs.sqlite3-shm
 
 # Local media and generated work; keep users' files out of source control
 uploads/*

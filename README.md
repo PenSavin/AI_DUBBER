@@ -8,6 +8,7 @@ AI DUBBER is a local-first Windows app for transcribing video dialogue, translat
 - Transcribe speech locally with faster-whisper. Long transcriptions stream captions as they arrive and can resume from the latest saved caption.
 - Translate and review dialogue, edit segment timing, assign speaker voices, and generate Khmer speech.
 - Export dubbed MP4 videos with subtitles, or download SRT and WebVTT subtitle files.
+- Split full-length movies into fixed-duration parts with accurate re-encoding or faster keyframe-based stream copy.
 - Create vertical clips with Auto make Reels, save projects as `.dubproj`, or bundle media and edits into a portable `.dubpack`.
 - Use optional speaker identity diarization and dialogue/accompaniment separation.
 - Publish or schedule finished videos to YouTube and Facebook Pages.
@@ -40,6 +41,12 @@ The API key is stored in the current browser's local storage and sent to the loc
 
 Auto make Reels selects up to five dialogue-dense moments using caption timing. It can add translated captions when available and uses a blurred background to fill the vertical frame. It does not evaluate story meaning or identify faces.
 
+### Movie Splitter
+
+Load a video, open **Movie Splitter**, and select a preset from 1 to 3 minutes or enter a custom length from 15 seconds to 60 minutes. The workspace calculates the expected part count before starting. **Accurate cuts** re-encode each part and cut at the selected times; **Fast cuts** copy the original streams and cut at nearby keyframes, so the resulting part lengths can vary. Both modes preserve the source frame dimensions and audio/video timing.
+
+Jobs run in the local background worker and report FFmpeg progress. You can cancel or retry a job, and queued jobs are recovered if the app restarts. Completed parts and thumbnails are saved in `outputs/`; download parts individually or use the generated ZIP. **Open in editor** loads a part into the existing transcription and dubbing workflow. The app allows up to 2,000 parts per split job.
+
 ## Local processing and data
 
 Transcription and FFmpeg rendering run on this computer. The source video is not sent to Gemini; transcript text is sent for translation. Translated speech text is sent to the online Edge TTS service for voice generation.
@@ -47,6 +54,8 @@ Transcription and FFmpeg rendering run on this computer. The source video is not
 In a source checkout, uploads, audio segments, exports, and publisher credentials are stored in the project data folders: `uploads/`, `audio_segments/`, `outputs/`, and `publisher_data/`. The packaged desktop app stores writable data under `%LOCALAPPDATA%\AI DUBBER`. Set `AI_DUBBER_DATA_DIR` to choose a different data directory.
 
 A `.dubproj` stores project settings and segment edits while referring to local media files. A `.dubpack` includes the source video, generated audio, optional separated background track, and project manifest. Packages do not recompress media, so allow enough free disk space.
+
+Movie Splitter job metadata is stored in `ai_dubber_jobs.sqlite3` in the app data directory. It tracks job status and results; video files remain in the normal media folders.
 
 ## Optional audio features
 
