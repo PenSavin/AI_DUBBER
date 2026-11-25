@@ -806,6 +806,11 @@ const initializeDubbingApp = () => {
     const btnConfirmDownloadUrl = document.getElementById("btnConfirmDownloadUrl");
     const videoUrlInput = document.getElementById("videoUrlInput");
     const urlDownloadProgress = document.getElementById("urlDownloadProgress");
+    const urlDownloadProgressText = document.getElementById("urlDownloadProgressText");
+    const urlDownloadPercent = document.getElementById("urlDownloadPercent");
+    const urlDownloadProgressTrack = document.getElementById("urlDownloadProgressTrack");
+    const urlDownloadProgressBar = document.getElementById("urlDownloadProgressBar");
+    const urlDownloadMetrics = document.getElementById("urlDownloadMetrics");
 
     const publisherModal = document.getElementById("publisherModal");
     const btnOpenPublisher = document.getElementById("btnOpenPublisher");
@@ -2828,12 +2833,85 @@ const initializeDubbingApp = () => {
 
     // --- Video URL Download Modal Logic (yt-dlp) ---
 
+    function formatDownloadSize(bytes) {
+        if (!Number.isFinite(bytes) || bytes < 0) return "--";
+        const units = ["B", "KB", "MB", "GB", "TB"];
+        let value = bytes;
+        let unit = 0;
+        while (value >= 1024 && unit < units.length - 1) {
+            value /= 1024;
+            unit += 1;
+        }
+        return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+    }
+
+    function formatDownloadSpeed(bytesPerSecond) {
+        if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return "Speed: calculating…";
+        return `Speed: ${formatDownloadSize(bytesPerSecond)}/s`;
+    }
+
+    function formatDownloadEta(seconds) {
+        if (!Number.isFinite(seconds) || seconds < 0) return "Time left: calculating…";
+        const rounded = Math.ceil(seconds);
+        if (rounded < 60) return `Time left: about ${rounded}s`;
+        const minutes = Math.floor(rounded / 60);
+        const remainder = rounded % 60;
+        if (minutes < 60) return `Time left: about ${minutes}m ${remainder}s`;
+        const hours = Math.floor(minutes / 60);
+        return `Time left: about ${hours}h ${minutes % 60}m`;
+    }
+
+    async function readVideoDownloadEvents(response, onEvent) {
+        const reader = response.body?.getReader();
+        if (!reader) throw new Error("This browser could not read the download progress stream.");
+        const decoder = new TextDecoder();
+        let buffer = "";
+        let completedData = null;
+
+        const dispatch = (block) => {
+            const dataLine = block.split(/\r?\n/).find(line => line.startsWith("data:"));
+            if (!dataLine) return;
+            const event = JSON.parse(dataLine.slice(5).trim());
+            onEvent(event);
+            if (event.type === "error") throw new Error(event.message || "Video download failed.");
+            if (event.type === "complete") completedData = event.data;
+        };
+
+        while (!completedData) {
+            const { value, done } = await reader.read();
+            if (done) break;
+            buffer += decoder.decode(value, { stream: true });
+            const blocks = buffer.split(/\r?\n\r?\n/);
+            buffer = blocks.pop() || "";
+            for (const block of blocks) {
+                dispatch(block);
+                if (completedData) break;
+            }
+        }
+
+        buffer += decoder.decode();
+        if (!completedData && buffer.trim()) dispatch(buffer);
+        if (!completedData) throw new Error("The video download ended before completion was reported.");
+        return completedData;
+    }
+
     if (btnOpenLinkModal) {
         btnOpenLinkModal.addEventListener("click", () => {
             urlDownloadModal.classList.remove("hidden");
             urlDownloadProgress.classList.add("hidden");
             videoUrlInput.value = "";
             btnConfirmDownloadUrl.disabled = false;
+            if (urlDownloadPercent) urlDownloadPercent.textContent = "--";
+            if (urlDownloadProgressText) urlDownloadProgressText.textContent = "Preparing video download…";
+            if (urlDownloadMetrics) urlDownloadMetrics.textContent = "Speed: -- · Time left: --";
+            if (urlDownloadProgressBar) {
+                urlDownloadProgressBar.style.width = "0%";
+                urlDownloadProgressBar.classList.remove("animate-pulse");
+            }
+            if (urlDownloadProgressTrack) {
+                urlDownloadProgressTrack.setAttribute("aria-valuenow", "0");
+                urlDownloadProgressTrack.removeAttribute("aria-valuetext");
+            }
         });
     }
 
@@ -2859,10 +2937,20 @@ const initializeDubbingApp = () => {
 
             btnConfirmDownloadUrl.disabled = true;
             urlDownloadProgress.classList.remove("hidden");
+            if (urlDownloadPercent) urlDownloadPercent.textContent = "--";
+            if (urlDownloadProgressText) urlDownloadProgressText.textContent = "Preparing video download…";
+            if (urlDownloadMetrics) urlDownloadMetrics.textContent = "Speed: calculating… · Time left: calculating…";
+            if (urlDownloadProgressBar) {
+                urlDownloadProgressBar.style.width = "30%";
+                urlDownloadProgressBar.classList.add("animate-pulse");
+            }
             setStatus("កំពុងទាញយកវីដេអូ", "ប្រព័ន្ធកំពុងទាញយកវីដេអូពី Link... សូមរង់ចាំ។");
 
             try {
-                const response = await fetch("/api/download-url", {
+                let sampledBytes = 0;
+                let sampledAt = performance.now();
+                let measuredSpeed = 0;
+                const response = await fetch("/api/download-url-progress", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ url: url })
@@ -2873,7 +2961,74 @@ const initializeDubbingApp = () => {
                     throw new Error(err.detail || "ការទាញយកវីដេអូបរាជ័យ");
                 }
 
-                const data = await response.json();
+                const data = await readVideoDownloadEvents(response, (event) => {
+                    if (event.type === "progress") {
+                        const now = performance.now();
+                        const downloaded = Number(event.downloaded_bytes) || 0;
+                        const total = Number(event.total_bytes) || 0;
+                        const elapsedSeconds = (now - sampledAt) / 1000;
+                        const byteDelta = downloaded - sampledBytes;
+                        if (byteDelta > 0 && elapsedSeconds > 0) {
+                            const instantSpeed = byteDelta / elapsedSeconds;
+                            measuredSpeed = measuredSpeed > 0 ? measuredSpeed * 0.65 + instantSpeed * 0.35 : instantSpeed;
+                        }
+                        sampledBytes = downloaded;
+                        sampledAt = now;
+
+                        const percent = event.percent !== null && event.percent !== undefined && Number.isFinite(Number(event.percent))
+                            ? Math.min(99, Math.max(0, Number(event.percent)))
+                            : null;
+                        if (percent !== null) {
+                            if (urlDownloadPercent) urlDownloadPercent.textContent = `${percent}%`;
+                            if (urlDownloadProgressTrack) {
+                                urlDownloadProgressTrack.setAttribute("aria-valuenow", String(percent));
+                                urlDownloadProgressTrack.setAttribute("aria-valuetext", `${percent}% downloaded`);
+                            }
+                            if (urlDownloadProgressBar) {
+                                urlDownloadProgressBar.classList.remove("animate-pulse");
+                                urlDownloadProgressBar.style.width = `${percent}%`;
+                            }
+                        } else {
+                            if (urlDownloadProgressTrack) {
+                                urlDownloadProgressTrack.removeAttribute("aria-valuenow");
+                                urlDownloadProgressTrack.setAttribute("aria-valuetext", "Download progress is not available yet");
+                            }
+                            if (urlDownloadProgressBar) {
+                                urlDownloadProgressBar.style.width = "30%";
+                                urlDownloadProgressBar.classList.add("animate-pulse");
+                            }
+                        }
+
+                        const reportedSpeed = Number(event.speed);
+                        const speed = Number.isFinite(reportedSpeed) && reportedSpeed > 0 ? reportedSpeed : measuredSpeed;
+                        const reportedEta = Number(event.eta);
+                        const eta = event.eta !== null && event.eta !== undefined && Number.isFinite(reportedEta)
+                            ? reportedEta
+                            : (total > downloaded && speed > 0 ? (total - downloaded) / speed : null);
+                        if (urlDownloadProgressText) {
+                            urlDownloadProgressText.textContent = event.status === "finished"
+                                ? "Merging downloaded audio and video…"
+                                : "Downloading video…";
+                        }
+                        const sizeSummary = total > 0
+                            ? `${formatDownloadSize(downloaded)} / ${formatDownloadSize(total)}`
+                            : `${formatDownloadSize(downloaded)} downloaded`;
+                        if (urlDownloadMetrics) {
+                            urlDownloadMetrics.textContent = `${formatDownloadSpeed(speed)} · ${event.status === "finished" ? "Finishing…" : formatDownloadEta(eta)} · ${sizeSummary}`;
+                        }
+                    } else if (event.type === "complete") {
+                        if (urlDownloadProgressText) urlDownloadProgressText.textContent = "Download complete; loading video…";
+                        if (urlDownloadPercent) urlDownloadPercent.textContent = "100%";
+                        if (urlDownloadProgressTrack) {
+                            urlDownloadProgressTrack.setAttribute("aria-valuenow", "100");
+                            urlDownloadProgressTrack.setAttribute("aria-valuetext", "100% downloaded");
+                        }
+                        if (urlDownloadProgressBar) {
+                            urlDownloadProgressBar.classList.remove("animate-pulse");
+                            urlDownloadProgressBar.style.width = "100%";
+                        }
+                    }
+                });
                 if (state.currentVideoFilename !== data.filename) {
                     state.copyrightReview = defaultRightsReview();
                     state.segments = [];

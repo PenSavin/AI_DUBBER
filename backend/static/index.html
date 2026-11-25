@@ -481,7 +481,7 @@
             <!-- Video placeholder when empty -->
             <div
               id="videoEmptyPlaceholder"
-              class="flex flex-col items-center justify-center p-6 text-center text-base-400"
+              class="absolute inset-0 z-10 flex flex-col items-center justify-center p-6 text-center text-base-400"
             >
               <div
                 class="w-12 h-12 rounded-lg bg-base-850 flex items-center justify-center mb-2.5 border border-base-800"
@@ -2044,15 +2044,14 @@
           </div>
 
           <div id="urlDownloadProgress" class="hidden">
-            <p
-              class="text-base-300 mb-1 text-[11px] font-medium"
-              id="urlDownloadProgressText"
-            >
-              កំពុងទាញយកវីដេអូតាមរយៈ yt-dlp... សូមរង់ចាំ
-            </p>
-            <div class="w-full bg-base-800 rounded-full h-1.5 overflow-hidden">
-              <div class="bg-base-300 h-full w-full animate-pulse"></div>
+            <div class="flex items-center justify-between gap-3 mb-1">
+              <p class="text-base-300 text-[11px] font-medium" id="urlDownloadProgressText">Preparing video download…</p>
+              <span id="urlDownloadPercent" class="text-base-100 text-[11px] font-semibold tabular-nums">--</span>
             </div>
+            <div id="urlDownloadProgressTrack" role="progressbar" aria-label="Video download progress" aria-valuemin="0" aria-valuemax="100" class="w-full bg-base-800 rounded-full h-1.5 overflow-hidden">
+              <div id="urlDownloadProgressBar" class="bg-base-300 h-full w-0 transition-[width] duration-200"></div>
+            </div>
+            <p id="urlDownloadMetrics" class="mt-1.5 text-base-400 text-[10px] tabular-nums">Speed: -- · Time left: --</p>
           </div>
         </div>
 

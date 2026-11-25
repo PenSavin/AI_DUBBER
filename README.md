@@ -81,7 +81,7 @@ These features are not installed by the normal setup and do not affect the defau
 
 ### Dialogue and accompaniment separation
 
-1. Install `python -m pip install -r backend/requirements-separation.txt`. [Demucs](https://github.com/facebookresearch/demucs) also requires PyTorch; if pip installs an unsuitable CPU/CUDA build, install the matching PyTorch build from the [official PyTorch selector](https://pytorch.org/get-started/locally/).
+1. Install the optional dependency into the app environment: `.venv\Scripts\python.exe -m pip install -r backend\requirements-separation.txt`. [Demucs](https://github.com/facebookresearch/demucs) also requires PyTorch; if pip installs an unsuitable CPU/CUDA build, install the matching PyTorch build from the [official PyTorch selector](https://pytorch.org/get-started/locally/).
 2. Restart the app and choose **Separate Dialogue**. The generated accompaniment is saved locally and mixed with the dubbed voices during video export. Choose **Use Original Audio** to clear it.
 3. The first run downloads Demucs model weights. Processing is local and can be slow on long videos, especially on CPU.
 

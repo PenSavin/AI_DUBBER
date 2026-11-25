@@ -1528,7 +1528,17 @@ async def separate_dialogue_endpoint(request: RemoveVoiceRequest):
             saved_track.unlink(missing_ok=True)
         message = str(e)
         if "No module named demucs" in message:
-            message = "Dialogue separation is optional. Install backend/requirements-separation.txt, then restart the app."
+            if getattr(sys, "frozen", False):
+                message = (
+                    "Dialogue separation is not included in the packaged desktop app. "
+                    "Start the Python version with run.bat to use this feature."
+                )
+            else:
+                message = (
+                    "Dialogue separation is optional. Install it into the app environment with "
+                    "'.venv\\Scripts\\python.exe -m pip install -r backend\\requirements-separation.txt', "
+                    "then restart the app."
+                )
         raise HTTPException(status_code=500, detail=f"Dialogue separation failed: {message}")
     finally:
         temp_wav.unlink(missing_ok=True)
