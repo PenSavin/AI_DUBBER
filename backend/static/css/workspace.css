@@ -343,7 +343,18 @@ body {
 
 #transcriptWorkspacePanel [data-timeline-layer] { border-radius: 8px; }
 
-#segmentsTable { border-collapse: separate; border-spacing: 0 5px; }
+#segmentsTable {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: separate;
+    border-spacing: 0 5px;
+}
+
+#segmentsTableBody select,
+#segmentsTableBody textarea {
+    min-width: 0;
+    max-width: 100%;
+}
 
 #segmentsTable thead th {
     position: sticky;

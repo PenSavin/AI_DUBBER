@@ -1,112 +1,148 @@
-<<<<<<< HEAD
-# AI Movie Translator and Dubber
+# AI DUBBER
 
-A local-first Windows app for translating video dialogue, reviewing the translation, generating dubbed speech, and exporting a finished video. The backend uses FastAPI, faster-whisper, Gemini, edge-tts, and FFmpeg. The Angular source is in `frontend/`; its compiled interface and fallback are served from `backend/static/`.
+AI DUBBER is a local-first Windows app for transcribing video dialogue, translating it into Khmer, generating dubbed speech, and exporting finished videos. Video processing and project files stay on your computer; translation uses Google Gemini and voice generation uses Edge TTS.
 
-## Quick start on Windows
+## Features
 
-1. Install Python 3.10 or newer. Node.js/npm is optional when using the bundled interface; install it if you want to rebuild the Angular UI.
-2. Run `setup.bat` once. It creates `.venv`, installs `backend/requirements.txt`, and builds the UI when npm is available.
-3. Run `run.bat` and open `http://127.0.0.1:8000`.
-4. Add a Gemini API key in Settings to translate dialogue. The key is kept in the browser or embedded webview's local storage and sent to the local backend only when testing the key or translating.
+- Upload a video or download one from a supported URL. URL downloads show progress, speed, and an estimated time remaining when the source provides enough information.
+- Transcribe speech locally with faster-whisper. Long transcriptions stream captions as they arrive and can resume from the latest saved caption.
+- Translate and review dialogue, edit segment timing, assign speaker voices, and generate Khmer speech.
+- Export dubbed MP4 videos with subtitles, or download SRT and WebVTT subtitle files.
+- Create vertical clips with Auto make Reels, save projects as `.dubproj`, or bundle media and edits into a portable `.dubpack`.
+- Use optional speaker identity diarization and dialogue/accompaniment separation.
+- Publish or schedule finished videos to YouTube and Facebook Pages.
 
-## Run it as a Windows app
+Use videos you own or have permission to edit and publish.
 
-To build the desktop app, first run `setup.bat`, then run `build_exe.bat`. The finished app is `dist\AI DUBBER\AI DUBBER.exe`. Copy the entire `dist\AI DUBBER` folder to a writable location on the PC and double-click the EXE. It starts the local service and displays the interface in its own desktop window without opening a separate browser. The window uses the Microsoft Edge WebView2 Runtime, which is included with Windows 11 and available for most Windows 10 PCs. Connecting YouTube still opens a browser for Google sign-in.
+## Requirements
 
-The executable folder includes the bundled interface and FFmpeg. Uploaded videos, generated audio, exports, publishing credentials, and logs are stored under `%LOCALAPPDATA%\AI DUBBER`. The first transcription downloads the selected Whisper model, and translation and voice generation still need internet access as described below.
+- Windows 10 or 11 and Python 3.10 or newer.
+- FFmpeg is included at `backend/bin/ffmpeg.exe`.
+- Node.js and npm are optional for running the bundled UI. They are needed to rebuild the Angular interface.
+- Internet access is required for Gemini translation, Edge TTS voice generation, URL downloads, and first-time model downloads.
 
-Pyannote speaker diarization and Demucs dialogue separation remain optional Python-only add-ons and are not included in the packaged executable.
+## Quick start
 
-The local health check is available at `http://127.0.0.1:8000/api/health`; interactive API documentation is at `/docs`.
+1. Run `setup.bat`. It creates `.venv`, installs the backend dependencies, and builds the UI when npm is available.
+2. Run `run.bat` and open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+3. Open **Settings**, add a Google Gemini API key, and select a model before translating.
 
-Transcription and FFmpeg rendering run on this computer. Whisper model weights are downloaded the first time a selected model is used. Translation sends transcript text to Gemini, and voice generation uses the online Edge TTS service, so those steps require internet access. The source video itself is not sent to Gemini by the translation workflow.
+The API key is stored in the current browser's local storage and sent to the local backend when testing the key or translating.
 
 ## Workflow
 
-1. Upload a video or download one from a supported URL.
-2. Transcribe dialogue, translate it, then review and edit segment text and timing.
-3. Assign speaker profiles and voices, generate speech, and check timing.
-4. Review subtitle timing and reading-speed warnings, then download SRT/WebVTT or export a dubbed MP4.
-5. Save a lightweight `.dubproj`, or export a portable `.dubpack` with the video and generated audio clips.
+1. Upload a video or paste a supported video URL.
+2. Select **Transcribe**. The first run downloads the selected Whisper model.
+3. Translate the transcript, then review and adjust the text, timing, and speaker assignments.
+4. Generate voice clips and preview the result. Choose whether to keep the original audio or use a separated accompaniment track.
+5. Export the dubbed video, download subtitles, or create short vertical clips.
+6. Save a `.dubproj` to keep edits and local file references, or export a `.dubpack` to transfer the project with its media.
 
-The workspace also includes autosave and recovery, resumable transcription from the last saved caption, speaker voice profiles, glossary-aware translation, find/replace, timeline editing, audio mixing choices, and subtitle export checks for reading speed and caption length.
+Auto make Reels selects up to five dialogue-dense moments using caption timing. It can add translated captions when available and uses a blurred background to fill the vertical frame. It does not evaluate story meaning or identify faces.
 
-Use **Auto make Reels** after transcription to export up to five dialogue-dense moments as separate vertical 9:16 MP4 clips. The editor uses caption timing and dialogue density to select moments, adds translated captions when available (otherwise the original transcript), and fills the vertical frame with a blurred background. Optional Demucs separation can reduce dialogue while retaining accompaniment such as music and effects; results may contain artifacts. Another option blurs the bottom 20% of the source frame to cover burned-in captions. Moment selection does not evaluate story meaning or identify faces. Use videos you own or have permission to edit and share.
+## Local processing and data
 
-## Publish YouTube Shorts and Facebook Reels
+Transcription and FFmpeg rendering run on this computer. The source video is not sent to Gemini; transcript text is sent for translation. Translated speech text is sent to the online Edge TTS service for voice generation.
 
-The **Schedule YouTube Shorts / Facebook Reels** panel can upload a finished video from `outputs/` to YouTube and a Facebook Page. It supports publishing now or scheduling through the platform APIs, so the local app does not need to stay open after the platforms accept a scheduled post. YouTube calls these Shorts; square or vertical uploads up to three minutes are categorized as Shorts by YouTube. Facebook Reels require a vertical 9:16 video, at least 540×960, between 3 and 90 seconds.
+In a source checkout, uploads, audio segments, exports, and publisher credentials are stored in the project data folders: `uploads/`, `audio_segments/`, `outputs/`, and `publisher_data/`. The packaged desktop app stores writable data under `%LOCALAPPDATA%\AI DUBBER`. Set `AI_DUBBER_DATA_DIR` to choose a different data directory.
 
-Run `setup.bat` again after updating so the YouTube and Facebook API libraries are installed. Then restart the app.
+A `.dubproj` stores project settings and segment edits while referring to local media files. A `.dubpack` includes the source video, generated audio, optional separated background track, and project manifest. Packages do not recompress media, so allow enough free disk space.
 
-### Connect YouTube
+## Optional audio features
 
-1. In Google Cloud Console, create a project, enable **YouTube Data API v3**, and create an **OAuth Client ID** with application type **Desktop app**.
-2. In the publishing panel, choose the downloaded Google OAuth client JSON file, then select **Connect YouTube** and approve access in the browser.
-3. Select a finished video, add its title and description, choose public/unlisted/private for immediate uploads, or set a future time to schedule it.
-
-### Connect a Facebook Page
-
-1. Create a Meta developer app with Facebook Login enabled.
-2. Add the callback URL shown in the publishing panel to the app's Valid OAuth Redirect URIs.
-3. Request `pages_show_list`, `pages_read_engagement`, and `pages_manage_posts`. The Facebook account must have the Page's `CREATE_CONTENT` task. Meta may require App Review before an app can publish to Pages outside its developer/test roles.
-4. Enter the Meta App ID and App Secret, save them, connect Facebook, and choose the Page.
-
-Publishing requires a confirmation that you have rights to post the selected video. The AI disclosure checkbox is on by default because this app generates dubbed speech. OAuth client details and tokens stay in the local, Git-ignored `publisher_data/` folder. Do not share that folder.
-
-By default, automatic voice suggestions estimate pitch and do not identify recurring people. Optional pyannote diarization can label recurring speakers; optional Demucs separation can create an accompaniment track to mix under the new dub.
-
-## Project folders
-
-- `frontend/`: Angular source, development proxy, and npm configuration.
-- `backend/`: FastAPI app, publisher integration, Python requirements, `bin/` FFmpeg binary, and served UI assets.
-- `uploads/`: source videos and temporary media files created at the project root during development.
-- `audio_segments/`: generated voice clips created at the project root during development.
-- `outputs/`: exported videos and temporary render files created at the project root during development.
-- `publisher_data/`: publishing credentials and tokens created at the project root during development.
-
-Video files are local to this machine. A `.dubproj` stores project metadata and segment edits; it keeps references to local media. A `.dubpack` bundles the source video, generated speech clips, optional separated background track, and project manifest for transfer to another machine. Keep enough free disk space for the archive, which stores media without recompressing it.
-
-## Optional audio models
-
-These features are not installed by the normal setup and do not affect the default workflow.
+These add-ons are not installed by the standard setup.
 
 ### Speaker identity diarization
 
-1. Accept the access conditions for [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) on Hugging Face and create a read token for your account.
-2. Install the optional dependency in the app environment: `python -m pip install -r backend/requirements-diarization.txt`.
-3. In the same PowerShell window used to start the app, set `AI_DUBBER_HF_TOKEN` to the token. Optionally set `AI_DUBBER_DIARIZATION_DEVICE=cpu` or `cuda` (CPU is the default).
-4. Restart the app and use **Auto Detect Speakers**. Without a configured token and installed package, the app reports that it used pitch suggestions instead.
+By default, automatic speaker suggestions use pitch and do not identify recurring people. To enable pyannote diarization:
+
+1. Accept the access conditions for [pyannote/speaker-diarization-community-1](https://huggingface.co/pyannote/speaker-diarization-community-1) and create a Hugging Face read token.
+2. Install the add-on into the app environment:
+
+   ```powershell
+   .venv\Scripts\python.exe -m pip install -r backend\requirements-diarization.txt
+   ```
+
+3. In the same PowerShell window used to start the app, set `AI_DUBBER_HF_TOKEN` to your token. Optionally set `AI_DUBBER_DIARIZATION_DEVICE` to `cpu` or `cuda`.
+4. Restart the app and choose **Auto Detect Speakers**.
 
 ### Dialogue and accompaniment separation
 
-1. Install the optional dependency into the app environment: `.venv\Scripts\python.exe -m pip install -r backend\requirements-separation.txt`. [Demucs](https://github.com/facebookresearch/demucs) also requires PyTorch; if pip installs an unsuitable CPU/CUDA build, install the matching PyTorch build from the [official PyTorch selector](https://pytorch.org/get-started/locally/).
-2. Restart the app and choose **Separate Dialogue**. The generated accompaniment is saved locally and mixed with the dubbed voices during video export. Choose **Use Original Audio** to clear it.
-3. The first run downloads Demucs model weights. Processing is local and can be slow on long videos, especially on CPU.
+Install Demucs into the app environment, then restart the app:
 
-To resume a long transcription, restore the autosaved project after restarting the page or app and click **Transcribe**. The app continues from the latest saved caption; use the same source video, which must still be present in `uploads/`.
+```powershell
+.venv\Scripts\python.exe -m pip install -r backend\requirements-separation.txt
+```
 
-## Configure and update
+Choose **Separate Dialogue** to create an accompaniment track for export. The first run downloads model weights, and processing can be slow on long videos, especially on CPU. Set `AI_DUBBER_DEMUCS_DEVICE` to `cpu` or `cuda` if needed. Use the [official PyTorch selector](https://pytorch.org/get-started/locally/) if pip installs a CPU/CUDA build that does not suit your system.
 
-- The default upload limit is 20 GiB. Change it with `AI_DUBBER_MAX_UPLOAD_BYTES` before starting the app.
-- The default `.dubpack` limit is twice the upload limit. Change it with `AI_DUBBER_MAX_PACKAGE_BYTES` if your video plus generated audio requires more space.
-- Optional model settings: `AI_DUBBER_HF_TOKEN` and `AI_DUBBER_DIARIZATION_DEVICE` configure pyannote; `AI_DUBBER_DEMUCS_DEVICE` accepts `cpu` or `cuda` and defaults to CPU.
-- Whisper defaults to the `base` model. Set `AI_DUBBER_WHISPER_MODEL` to a faster-whisper model name to trade memory and speed for transcription quality. Set `AI_DUBBER_WHISPER_DEVICE` to `auto`, `cpu`, or `cuda`; `auto` uses a detected CTranslate2 CUDA device when its Windows cuBLAS runtime is available and falls back to CPU otherwise.
-- To update the backend, activate `.venv` and run `python -m pip install -r backend/requirements.txt`.
-- To update the interface, run `npm ci` and `npm run build` from `frontend/`. The build is written to `backend/static/app/`.
-- Run the Angular development UI with `npm start` in `frontend/`; it proxies API calls to the backend on port 8000.
+The packaged desktop EXE does not include pyannote or Demucs. Use the Python app started with `run.bat` to use these add-ons.
 
-## Troubleshooting
+## Publish YouTube Shorts and Facebook Reels
 
-- If the app says FFmpeg is missing, make sure `backend/bin/ffmpeg.exe` exists or install the Python package `imageio-ffmpeg`, then restart.
-- If uploads fail, check that the file is a supported video format, is below the configured limit, and there is enough free disk space. Check `/api/health` for FFmpeg and storage status.
-- If translation fails, recheck the Gemini API key and selected model in Settings. Translation requires an internet connection and may use paid API quota.
-- If the page does not show the current UI, run `setup.bat` with Node.js/npm installed to rebuild `backend/static/app/`.
+The publishing panel can upload a finished video from `outputs/` immediately or schedule it through the platform APIs. The app does not need to stay open after a platform accepts a scheduled post.
+
+### YouTube
+
+1. In Google Cloud Console, create a project, enable **YouTube Data API v3**, and create an OAuth client for a desktop application.
+2. In the publishing panel, select the downloaded OAuth client JSON and choose **Connect YouTube**.
+3. Approve access in the browser, then choose a finished video and enter its publishing details.
+
+### Facebook Page
+
+1. Create a Meta developer app and enable Facebook Login.
+2. Add the callback URL shown in the publishing panel to the app's Valid OAuth Redirect URIs.
+3. Configure the requested Page permissions, then enter the Meta App ID and App Secret in the publishing panel.
+4. Connect Facebook and select the Page to publish to.
+
+Publishing requires confirmation that you have rights to post the selected video. The AI disclosure option is enabled by default. OAuth details and tokens are stored in the local `publisher_data/` folder; do not share that folder.
+
+## Configuration
+
+- `AI_DUBBER_MAX_UPLOAD_BYTES`: upload limit; defaults to 20 GiB.
+- `AI_DUBBER_MAX_PACKAGE_BYTES`: `.dubpack` limit; defaults to twice the upload limit.
+- `AI_DUBBER_DATA_DIR`: location for uploads, exports, audio segments, and publisher data.
+- `AI_DUBBER_WHISPER_MODEL`: faster-whisper model name; defaults to `base`.
+- `AI_DUBBER_WHISPER_DEVICE`: `auto`, `cpu`, or `cuda`. `auto` uses a detected CTranslate2 CUDA device when available and otherwise falls back to CPU.
+- `AI_DUBBER_WHISPER_COMPUTE_TYPE` and `AI_DUBBER_WHISPER_COMPUTE_TYPE_CPU`: optional compute type settings.
+- `AI_DUBBER_HF_TOKEN` and `AI_DUBBER_DIARIZATION_DEVICE`: configure optional pyannote diarization.
+- `AI_DUBBER_DEMUCS_DEVICE`: `cpu` or `cuda` for optional Demucs separation; defaults to `cpu`.
+
+Set environment variables before starting the app. Restart the app after changing them.
+
+The local health check is [http://127.0.0.1:8000/api/health](http://127.0.0.1:8000/api/health). Interactive API documentation is at [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs).
+
+## Build the Windows desktop app
+
+1. Run `setup.bat`.
+2. Run `build_exe.bat`.
+3. Copy the entire `dist\AI DUBBER` folder to a writable location and launch `AI DUBBER.exe`.
+
+The executable uses the Microsoft Edge WebView2 Runtime. Packaged app data is saved under `%LOCALAPPDATA%\AI DUBBER`; copy the entire folder when moving the app. Optional pyannote and Demucs add-ons are not bundled.
 
 ## Development
 
-From the project root, start the API with `cd backend` followed by `python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload`. In another terminal, run `npm start` from `frontend/` and open `http://localhost:4200`.
-=======
-# AI_DUBBER
->>>>>>> 1cee21a0443bf008d7806f556556d12c6c6c6cc8
+Start the backend from the project root:
+
+```powershell
+.venv\Scripts\python.exe -m uvicorn main:app --app-dir backend --host 127.0.0.1 --port 8000 --reload
+```
+
+In another terminal, start the Angular development server:
+
+```powershell
+cd frontend
+npm start
+```
+
+Open [http://localhost:4200](http://localhost:4200). The dev server proxies API requests to the backend on port 8000.
+
+To update the UI dependencies and production bundle, run `npm ci` and `npm run build` from `frontend/`. The production UI is written to `backend/static/app/`. To reinstall backend dependencies, run `.venv\Scripts\python.exe -m pip install -r backend\requirements.txt` from the project root.
+
+## Troubleshooting
+
+- **FFmpeg is missing:** Check that `backend/bin/ffmpeg.exe` exists. In a source setup, reinstalling the backend requirements also installs `imageio-ffmpeg` as a fallback.
+- **Upload fails:** Check the file format, upload limit, available disk space, and the `/api/health` report.
+- **Translation fails:** Check the Gemini API key, selected model, internet connection, and available API quota.
+- **Dialogue separation is unavailable:** Install `backend/requirements-separation.txt` into `.venv` as shown above, then restart with `run.bat`. The packaged EXE does not contain Demucs.
+- **The interface looks outdated:** Refresh the page. To rebuild the bundled UI, install Node.js/npm and run `setup.bat` or the frontend build commands above.
