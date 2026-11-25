@@ -1,0 +1,431 @@
+:root {
+    --studio-canvas: #0b0f14;
+    --studio-panel: #111820;
+    --studio-raised: #161f29;
+    --studio-line: #26313d;
+    --studio-text: #edf2f7;
+    --studio-muted: #8c9aaa;
+    --studio-accent: #f0b84b;
+    --studio-mint: #76d8c3;
+    --studio-blue: #8aa7ff;
+}
+
+html.light {
+    --studio-canvas: #f2f5f8;
+    --studio-panel: #ffffff;
+    --studio-raised: #f7f9fb;
+    --studio-line: #d9e1e9;
+    --studio-text: #18212c;
+    --studio-muted: #667585;
+    --studio-accent: #a96909;
+    --studio-mint: #087f70;
+    --studio-blue: #405bb6;
+}
+
+body {
+    background: var(--studio-canvas) !important;
+    color: var(--studio-text);
+}
+
+#appHeader {
+    height: 68px;
+    min-height: 68px;
+    padding-inline: clamp(14px, 2vw, 32px);
+    gap: 20px;
+    background: color-mix(in srgb, var(--studio-panel) 94%, transparent) !important;
+    border-color: var(--studio-line) !important;
+    box-shadow: 0 8px 28px rgb(0 0 0 / 16%);
+    backdrop-filter: blur(18px);
+}
+
+#appHeader > div:first-child {
+    flex: 0 0 auto;
+    gap: 12px;
+}
+
+#appHeader > div:first-child > div:first-child {
+    width: 38px;
+    height: 38px;
+    border-radius: 13px;
+    color: #1b1a16;
+    background: linear-gradient(145deg, #f7cc72, #df9e2d) !important;
+    border: 1px solid rgb(255 255 255 / 45%) !important;
+    box-shadow: 0 5px 18px rgb(240 184 75 / 18%);
+}
+
+#appHeader > div:first-child > div:first-child i {
+    color: #1b1a16 !important;
+}
+
+#appHeader h1 {
+    font-size: 14px;
+    letter-spacing: .14em;
+}
+
+#appHeader > div:first-child p {
+    margin-top: 2px;
+    font-size: 10px;
+    color: var(--studio-muted) !important;
+}
+
+#headerToolbar {
+    flex: 1 1 auto;
+    min-width: 0;
+    justify-content: flex-end;
+    gap: 7px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+#headerToolbar::-webkit-scrollbar { display: none; }
+
+#headerToolbar > button,
+#headerToolbar > div:not(#languageToggle) > button {
+    min-height: 35px;
+    border-radius: 10px;
+    border-color: var(--studio-line) !important;
+    background-color: var(--studio-raised) !important;
+    color: var(--studio-text) !important;
+    white-space: nowrap;
+}
+
+#headerToolbar > button:hover,
+#headerToolbar > div:not(#languageToggle) > button:hover {
+    border-color: color-mix(in srgb, var(--studio-accent) 55%, var(--studio-line)) !important;
+    background-color: color-mix(in srgb, var(--studio-raised) 78%, var(--studio-accent)) !important;
+}
+
+#btnLoadVideo {
+    padding-inline: 13px;
+    background: var(--studio-accent) !important;
+    border-color: var(--studio-accent) !important;
+    color: #21180b !important;
+    font-weight: 700 !important;
+}
+
+#btnLoadVideo i { color: #21180b !important; }
+
+#projectDirtyStatus {
+    max-width: 112px;
+    color: var(--studio-muted) !important;
+    background: transparent !important;
+    border: 1px solid var(--studio-line);
+}
+
+#languageToggle {
+    display: flex;
+    padding: 3px;
+    gap: 2px;
+    border: 1px solid var(--studio-line);
+    border-radius: 11px;
+    background: var(--studio-raised);
+}
+
+#languageToggle button {
+    min-width: 32px;
+    height: 27px;
+    padding: 0 7px;
+    border: 0;
+    border-radius: 8px;
+    color: var(--studio-muted);
+    background: transparent;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+#languageToggle button[aria-pressed="true"] {
+    color: var(--studio-text);
+    background: color-mix(in srgb, var(--studio-line) 76%, transparent);
+}
+
+#workspaceSplit {
+    align-items: stretch;
+    background: var(--studio-canvas);
+}
+
+#videoWorkspacePanel {
+    width: 39%;
+    max-width: 600px;
+    min-width: 340px;
+    padding: 20px;
+    gap: 14px;
+    background: var(--studio-canvas) !important;
+    border-color: var(--studio-line) !important;
+}
+
+#videoWorkspacePanel > .flex.items-center.justify-between:first-child {
+    min-height: 26px;
+}
+
+#videoWorkspacePanel h2,
+#transcriptWorkspacePanel h2 {
+    color: var(--studio-text) !important;
+    font-size: 12px;
+    letter-spacing: .02em;
+}
+
+#videoDurationBadge {
+    border: 1px solid var(--studio-line) !important;
+    border-radius: 999px;
+    padding: 4px 10px;
+    color: var(--studio-accent) !important;
+    background: var(--studio-raised) !important;
+}
+
+.studio-panel {
+    padding: 13px 14px;
+    border: 1px solid var(--studio-line);
+    border-radius: 15px;
+    background: linear-gradient(145deg, var(--studio-panel), var(--studio-raised));
+    box-shadow: 0 12px 28px rgb(0 0 0 / 10%);
+}
+
+.studio-section-heading {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.studio-eyebrow {
+    color: var(--studio-muted);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: .13em;
+    white-space: nowrap;
+}
+
+.studio-section-title {
+    color: var(--studio-text);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.studio-workflow-buttons {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+#workflowActions button {
+    min-height: 40px;
+    justify-content: center;
+    border-radius: 11px;
+    border: 1px solid var(--studio-line) !important;
+    background: var(--studio-panel) !important;
+    color: var(--studio-text) !important;
+    font-size: 11px;
+    font-weight: 650;
+}
+
+#workflowActions #btnTranscribe i { color: var(--studio-blue) !important; }
+
+#workflowActions #btnTranslate {
+    border-color: color-mix(in srgb, var(--studio-mint) 45%, var(--studio-line)) !important;
+    background: color-mix(in srgb, var(--studio-mint) 13%, var(--studio-panel)) !important;
+}
+
+#workflowActions #btnTranslate,
+#workflowActions #btnTranslate i { color: var(--studio-mint) !important; }
+
+#workflowActions button:disabled { opacity: .38 !important; }
+
+#videoWorkspacePanel > .relative.w-full.aspect-video {
+    min-height: 170px;
+    border-radius: 17px;
+    border: 1px solid var(--studio-line) !important;
+    background: #05080c !important;
+    box-shadow: 0 18px 42px rgb(0 0 0 / 28%);
+}
+
+#videoElement { border-radius: inherit; }
+
+#videoEmptyPlaceholder > div {
+    border-radius: 16px;
+    border-color: #354250 !important;
+    color: var(--studio-accent);
+}
+
+#videoEmptyPlaceholder i { color: var(--studio-accent) !important; }
+
+#videoWorkspacePanel > .bg-base-850 {
+    padding: 13px;
+    border: 1px solid var(--studio-line) !important;
+    border-radius: 15px;
+    background: var(--studio-panel) !important;
+}
+
+#lblCurrentFilename { color: var(--studio-text) !important; }
+
+#lblAudioStatus {
+    border-radius: 999px;
+    color: var(--studio-muted) !important;
+    background: var(--studio-raised) !important;
+}
+
+#sourceAudioActions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 0;
+    margin-top: 10px;
+    border-top: 1px solid var(--studio-line);
+    border-bottom: 1px solid var(--studio-line);
+}
+
+.studio-audio-buttons { display: flex; gap: 7px; }
+
+.studio-audio-buttons button {
+    min-height: 32px;
+    padding: 6px 9px !important;
+    border-radius: 9px;
+    border: 1px solid var(--studio-line) !important;
+    background: var(--studio-raised) !important;
+    color: var(--studio-text) !important;
+    font-size: 10px;
+}
+
+.studio-audio-buttons #btnSeparateDialogue { color: var(--studio-mint) !important; }
+.studio-audio-buttons #btnRemoveVoice { color: var(--studio-muted) !important; }
+
+#videoWorkspacePanel label { color: var(--studio-muted) !important; }
+
+#videoWorkspacePanel .grid.grid-cols-2 button {
+    min-height: 36px;
+    border-radius: 10px;
+}
+
+#videoWorkspacePanel #btnGenerateVoice { color: var(--studio-text) !important; }
+#videoWorkspacePanel #btnGenerateVoice i { color: var(--studio-accent) !important; }
+#videoWorkspacePanel #btnExportVideo { background: var(--studio-accent) !important; }
+
+#statusNotificationBox {
+    border-radius: 13px;
+    border-color: var(--studio-line) !important;
+    background: color-mix(in srgb, var(--studio-panel) 88%, var(--studio-blue)) !important;
+}
+
+#transcriptWorkspacePanel {
+    background: var(--studio-canvas) !important;
+}
+
+#transcriptWorkspacePanel > .h-12 {
+    height: 58px;
+    padding-inline: 22px;
+    background: var(--studio-panel) !important;
+    border-color: var(--studio-line) !important;
+}
+
+#segmentsCountBadge {
+    border: 1px solid var(--studio-line) !important;
+    border-radius: 999px;
+    color: var(--studio-accent) !important;
+    background: var(--studio-raised) !important;
+}
+
+#transcriptWorkspacePanel input,
+#transcriptWorkspacePanel select {
+    min-height: 31px;
+    border-color: var(--studio-line) !important;
+    border-radius: 9px;
+    background: var(--studio-panel) !important;
+    color: var(--studio-text) !important;
+}
+
+#transcriptWorkspacePanel button {
+    border-radius: 9px;
+    transition: background-color .16s ease, border-color .16s ease, transform .16s ease;
+}
+
+#transcriptWorkspacePanel button:hover:not(:disabled) { transform: translateY(-1px); }
+
+#transcriptWorkspacePanel [data-timeline-layer] { border-radius: 8px; }
+
+#segmentsTable { border-collapse: separate; border-spacing: 0 5px; }
+
+#segmentsTable thead th {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    padding-top: 11px;
+    padding-bottom: 11px;
+    background: var(--studio-canvas) !important;
+    color: var(--studio-muted) !important;
+    border-color: var(--studio-line) !important;
+    font-size: 9px;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+}
+
+#segmentsTable tbody tr { background: var(--studio-panel); }
+#segmentsTable tbody td { border-block: 1px solid color-mix(in srgb, var(--studio-line) 65%, transparent); }
+#segmentsTable tbody td:first-child { border-left: 1px solid var(--studio-line); border-radius: 11px 0 0 11px; }
+#segmentsTable tbody td:last-child { border-right: 1px solid var(--studio-line); border-radius: 0 11px 11px 0; }
+
+#timelinePanel {
+    height: 198px;
+    min-height: 150px;
+    background: var(--studio-panel) !important;
+    border-color: var(--studio-line) !important;
+    box-shadow: 0 -12px 32px rgb(0 0 0 / 12%);
+}
+
+#timelinePanel > div:nth-of-type(2) {
+    height: 42px;
+    min-height: 42px;
+    padding-inline: 14px;
+    background: var(--studio-raised) !important;
+    border-color: var(--studio-line) !important;
+}
+
+#timelineTrackLabels { background: var(--studio-panel) !important; border-color: var(--studio-line) !important; }
+#timelineContainer { background: var(--studio-canvas) !important; }
+#timelineContentWrapper { padding-block: 8px; }
+
+html.light #videoWorkspacePanel > .relative.w-full.aspect-video { background: #10151b !important; }
+html.light #timelinePanel { box-shadow: 0 -10px 24px rgb(22 35 50 / 8%); }
+
+#liveProgressBar.is-indeterminate {
+    width: 32% !important;
+    transform: translateX(-125%);
+    animation: dubber-indeterminate-progress 1.3s ease-in-out infinite alternate;
+    transition: none !important;
+}
+
+@keyframes dubber-indeterminate-progress {
+    to { transform: translateX(312.5%); }
+}
+
+@media (max-width: 1250px) {
+    #appHeader { gap: 10px; padding-inline: 12px; }
+    #headerToolbar { gap: 5px; }
+    #headerToolbar > button { padding-inline: 8px !important; }
+    #btnOpenProject span,
+    #btnSaveProject span,
+    #btnExportPackage span { display: none; }
+    #projectDirtyStatus { max-width: 86px; }
+}
+
+@media (max-width: 980px) {
+    html, body { height: auto; max-height: none; min-height: 100%; overflow: auto; }
+    #appHeader { position: sticky; top: 0; z-index: 60; flex-wrap: wrap; height: auto; min-height: 62px; padding-block: 9px; }
+    #headerToolbar { flex-basis: 100%; justify-content: flex-start; padding-bottom: 2px; }
+    main { flex: none !important; overflow: visible !important; }
+    #workspaceSplit { flex-direction: column; overflow: visible; }
+    #videoWorkspacePanel { width: 100%; max-width: none; min-width: 0; overflow: visible; border-right: 0; border-bottom: 1px solid var(--studio-line); }
+    #transcriptWorkspacePanel { min-height: 580px; overflow: visible; }
+    #segmentsTable thead th { position: static; }
+    #timelinePanel { position: sticky; bottom: 0; z-index: 40; }
+}
+
+@media (max-width: 560px) {
+    #videoWorkspacePanel { padding: 14px; }
+    #sourceAudioActions { align-items: flex-start; flex-direction: column; }
+    .studio-audio-buttons { width: 100%; }
+    .studio-audio-buttons button { flex: 1 1 0; }
+    #transcriptWorkspacePanel > .h-12 { padding-inline: 12px; }
+    #transcriptWorkspacePanel > .h-12 > div:last-child { gap: 4px; }
+    #timelinePanel { height: 170px; }
+}

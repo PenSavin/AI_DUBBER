@@ -1,0 +1,1130 @@
+<!-- Top Navigation Bar (Clean Minimalist Monochromatic) -->
+    <header id="appHeader" class="h-14 border-b border-base-800 bg-base-900 px-5 flex items-center justify-between flex-shrink-0 z-40">
+        <div class="flex items-center gap-3">
+            <div class="w-8 h-8 rounded-lg bg-base-800 border border-base-700 flex items-center justify-center">
+                <i data-lucide="video" class="w-4 h-4 text-base-200"></i>
+            </div>
+            <div>
+                <h1 class="text-sm font-bold text-base-100 tracking-tight">
+                    AI DUBBER
+                </h1>
+                <p class="text-[11px] text-base-400">ប្រព័ន្ធបកប្រែ និងបញ្ចូលសំឡេងវីដេអូ AI</p>
+            </div>
+        </div>
+
+        <!-- Top Toolbar Buttons (Simple Neutral Theme) -->
+        <div id="headerToolbar" class="flex items-center gap-2">
+            <!-- Hidden Video Input -->
+            <input type="file" id="videoFileInput" accept="video/*" class="hidden">
+            <!-- Hidden Project File Input -->
+            <input type="file" id="projectFileInput" accept=".json,.dubproj,.dubpack" class="hidden">
+            
+            <button id="btnLoadVideo" class="px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-200 transition flex items-center gap-1.5">
+                <i data-lucide="upload" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>ផ្ទុកវីដេអូ</span>
+            </button>
+
+            <button id="btnOpenLinkModal" title="ទាញយកវីដេអូតាម Link (YouTube, TikTok, Facebook)" class="px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5 hover:text-base-100">
+                <i data-lucide="link" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>Link វីដេអូ</span>
+            </button>
+
+            <div class="h-4 w-px bg-base-800 mx-1"></div>
+
+            <!-- Project Save / Load Buttons -->
+            <button id="btnOpenProject" title="បើកគម្រោងដែលបានរក្សាទុក" class="px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5 hover:text-base-100">
+                <i data-lucide="folder-open" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>បើកគម្រោង</span>
+            </button>
+
+            <button id="btnSaveProject" title="រក្សាទុកគម្រោងការងារ" class="px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5 hover:text-base-100">
+                <i data-lucide="save" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>រក្សាទុក</span>
+            </button>
+            <button id="btnExportPackage" title="Export project with its video and generated audio" class="px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5 hover:text-base-100"><i data-lucide="package" class="w-3.5 h-3.5 text-base-400"></i><span>Package</span></button>
+            <span id="projectDirtyStatus" class="max-w-36 truncate rounded-md bg-base-850 px-2 py-1 text-[10px] text-base-500">គម្រោងថ្មី</span>
+
+            <div class="flex items-center gap-1 border-l border-base-800 pl-2">
+                <button id="btnUndo" type="button" title="មិនធ្វើវិញ (Ctrl+Z)" aria-label="មិនធ្វើវិញ" class="px-2 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs text-base-300 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i data-lucide="undo-2" class="w-3.5 h-3.5"></i>
+                </button>
+                <button id="btnRedo" type="button" title="ធ្វើឡើងវិញ (Ctrl+Y)" aria-label="ធ្វើឡើងវិញ" class="px-2 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs text-base-300 transition disabled:opacity-40 disabled:cursor-not-allowed">
+                    <i data-lucide="redo-2" class="w-3.5 h-3.5"></i>
+                </button>
+            </div>
+            <div id="languageToggle" role="group" aria-label="Interface language">
+                <button type="button" data-language="en" aria-pressed="false" title="Use English">EN</button>
+                <button type="button" data-language="km" aria-pressed="true" title="Use Khmer">KM</button>
+            </div>
+            <button id="btnThemeToggle" type="button" title="ប្តូរទៅ Light mode" aria-label="ប្តូរទៅ Light mode" aria-pressed="false" class="h-8 w-8 shrink-0 rounded-lg border border-base-750 bg-base-850 text-base-300 transition hover:bg-base-800">
+                <span id="themeToggleIcon" aria-hidden="true">☀</span>
+            </button>
+
+            <!-- Settings Button -->
+            <button id="btnOpenSettings" class="px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5 hover:text-base-100">
+                <i data-lucide="settings" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>ការកំណត់</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <main class="flex-1 flex flex-col overflow-hidden min-h-0">
+
+        <!-- Top Split Workspace: Video Player (Left) + Segments Editor (Right) -->
+        <div id="workspaceSplit" class="flex-1 flex overflow-hidden min-h-0">
+
+            <!-- Left Pane: Video Player Pane -->
+            <section id="videoWorkspacePanel" class="w-5/12 min-w-[360px] max-w-[500px] border-r border-base-800 bg-base-900 p-4 flex flex-col gap-3.5 overflow-y-auto min-h-0 flex-shrink-0">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="film" class="w-4 h-4 text-base-400"></i>
+                    <h2 class="text-xs font-semibold text-base-200">ផ្ទាំងមើលវីដេអូ (Video Player)</h2>
+                </div>
+                <span id="videoDurationBadge" class="text-[11px] font-mono px-2 py-0.5 rounded bg-base-850 border border-base-800 text-base-400">
+                    00:00 / 00:00
+                </span>
+            </div>
+
+<div id="workflowActions" class="studio-panel">
+                <div class="studio-section-heading"><span class="studio-eyebrow">WORKFLOW</span><span class="studio-section-title">Transcribe, then translate</span></div>
+                <div class="studio-workflow-buttons">
+                    <button id="btnTranscribe" class="px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-200 transition flex items-center gap-1.5 opacity-50 cursor-not-allowed" disabled>
+                <i data-lucide="file-text" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>បម្លែងអត្ថបទ</span>
+            </button>
+                    <button id="btnTranslate" class="px-3 py-1.5 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 text-xs font-semibold transition flex items-center gap-1.5 opacity-50 cursor-not-allowed" disabled>
+                <i data-lucide="languages" class="w-3.5 h-3.5 text-base-950"></i>
+                <span>បកប្រែ</span>
+            </button>
+                </div>
+            </div>
+
+                        <!-- Video Player Box with Subtitle Overlay -->
+            <div class="relative w-full aspect-video bg-black rounded-lg overflow-hidden border border-base-800 flex items-center justify-center">
+                <video id="videoElement" class="w-full h-full object-contain" preload="metadata"></video>
+
+                <button id="btnToggleLiveSubtitles" type="button" aria-pressed="true" title="បិទ Subtitle ក្នុងផ្ទាំងមើល"
+                    class="absolute top-2 right-2 z-20 px-2.5 py-1 rounded-md bg-black/75 border border-zinc-600 text-white text-[11px] font-semibold hover:bg-black transition">
+                    CC <span>បើក</span>
+                </button>
+                
+                <!-- Live Khmer Subtitle Overlay (Clean simple style) -->
+                <div id="liveSubtitleOverlay" class="absolute bottom-4 left-3 right-3 text-center pointer-events-none transition-all hidden">
+                    <span class="inline-block px-3 py-1 rounded bg-black/85 text-white font-medium text-xs md:text-sm border border-zinc-700/60 leading-relaxed max-w-full">
+                        អត្ថបទបកប្រែនឹងបង្ហាញនៅទីនេះ...
+                    </span>
+                </div>
+
+                <!-- Video placeholder when empty -->
+                <div id="videoEmptyPlaceholder" class="flex flex-col items-center justify-center p-6 text-center text-base-400">
+                    <div class="w-12 h-12 rounded-lg bg-base-850 flex items-center justify-center mb-2.5 border border-base-800">
+                        <i data-lucide="video" class="w-6 h-6 text-base-500"></i>
+                    </div>
+                    <p class="text-xs font-medium text-base-300 mb-0.5">មិនទាន់មានវីដេអូ</p>
+                    <p class="text-[11px] text-base-500">សូមចុច "ផ្ទុកវីដេអូ" ខាងលើដើម្បីចាប់ផ្តើម</p>
+                </div>
+            </div>
+
+            <!-- Video Info & Export Bar -->
+            <div class="bg-base-850 rounded-lg p-3.5 border border-base-800 flex flex-col gap-2.5">
+                <div class="flex items-center justify-between text-xs text-base-400">
+                    <span class="flex items-center gap-1.5 truncate max-w-[200px]">
+                        <i data-lucide="file" class="w-3.5 h-3.5 text-base-400"></i>
+                        <span id="lblCurrentFilename" class="truncate font-mono">គ្មានឯកសារ</span>
+                    </span>
+                    <span id="lblAudioStatus" class="px-2 py-0.5 rounded bg-base-800 border border-base-750 text-[11px] text-base-400">
+                        សំឡេងដើម
+                    </span>
+                </div>
+
+<div id="sourceAudioActions">
+                    <span class="studio-eyebrow">SOURCE AUDIO</span>
+                    <div class="studio-audio-buttons"><button id="btnRemoveVoice" class="px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5 opacity-50 cursor-not-allowed" disabled>
+                <i data-lucide="mic-off" class="w-3.5 h-3.5 text-base-400"></i>
+                <span>លុបសំឡេងដើម</span>
+            </button><button id="btnSeparateDialogue" title="Separate dialogue and keep background audio" class="px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1.5"><i data-lucide="audio-lines" class="w-3.5 h-3.5 text-base-400"></i><span>Separate Dialogue</span></button></div>
+                </div>
+
+                                <div class="flex flex-wrap items-center justify-between gap-2 text-[11px] text-base-400 pt-2 border-t border-base-800">
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-base-200 transition">
+                        <input type="checkbox" id="chkLiveVoiceSync" checked class="rounded bg-base-900 border-base-750 text-base-100 focus:ring-0 w-3.5 h-3.5">
+                        <span>🔊 ស្តាប់សំឡេង AI លើវីដេអូផ្ទាល់ (Live Dub Sync)</span>
+                    </label>
+                    <label class="flex items-center gap-1.5 cursor-pointer hover:text-base-200 transition" title="បើក ឬបិទសំឡេងដើមក្នុង preview">
+                        <input type="checkbox" id="chkOriginalSound" checked class="rounded bg-base-900 border-base-750 text-base-100 focus:ring-0 w-3.5 h-3.5">
+                        <span>សំឡេងដើម</span>
+                        <span id="originalSoundToggleStatus" class="rounded bg-base-800 border border-base-750 px-1.5 py-0.5 text-[10px]">បើក</span>
+                    </label>
+                </div>
+
+                <div class="grid grid-cols-2 gap-2 pt-2 border-t border-base-800">
+                    <!-- Export Actions (Simple Neutral styling) -->
+                    <button id="btnGenerateVoice" class="px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-base-200 text-xs font-medium transition flex items-center justify-center gap-1.5 opacity-50 cursor-not-allowed" disabled>
+                        <i data-lucide="volume-2" class="w-3.5 h-3.5 text-base-300"></i>
+                        <span>បង្កើតសំឡេង</span>
+                    </button>
+
+                    <button id="btnExportVideo" class="px-3 py-2 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 text-xs font-semibold transition flex items-center justify-center gap-1.5 opacity-50 cursor-not-allowed" disabled>
+                        <i data-lucide="download" class="w-3.5 h-3.5 text-base-950"></i>
+                        <span>នាំចេញវីដេអូ</span>
+                    </button>
+
+                    <button id="btnAutoReel" type="button" class="col-span-2 px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-base-200 text-xs font-medium transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="scissors" class="w-3.5 h-3.5 text-base-300"></i>
+                        <span>Auto make Reels</span>
+                    </button>
+
+                    <button id="btnOpenPublisher" type="button" class="col-span-2 px-3 py-2 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-base-200 text-xs font-medium transition flex items-center justify-center gap-1.5">
+                        <i data-lucide="send" class="w-3.5 h-3.5"></i>
+                        <span>កំណត់ពេលផុស YouTube / Facebook</span>
+                    </button>
+
+                    <button id="btnRetryFailedVoice" type="button" disabled title="បង្កើតសំឡេងឡើងវិញតែ Segment ដែលបរាជ័យ" class="col-span-2 px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-base-300 text-xs font-medium transition flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
+                        <span>សាកបង្កើតសំឡេងឡើងវិញ</span>
+                    </button>
+
+                    <button id="btnExportSrt" class="col-span-1 px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-base-300 text-xs font-medium transition flex items-center justify-center gap-1.5 opacity-50 cursor-not-allowed hover:text-base-100" disabled>
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-base-400"></i>
+                        <span>ទាញយក Subtitle (.SRT)</span>
+                    </button>
+                    <button id="btnExportVtt" class="col-span-1 px-3 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 border border-base-750 text-base-300 text-xs font-medium transition flex items-center justify-center gap-1.5 opacity-50 cursor-not-allowed hover:text-base-100" disabled>
+                        <i data-lucide="file-text" class="w-3.5 h-3.5 text-base-400"></i>
+                        <span>ទាញយក Subtitle (.VTT)</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Progress / Status Notification Panel -->
+            <div id="statusNotificationBox" class="rounded-lg p-3 bg-base-850 border border-base-800 text-xs flex items-start gap-2.5 transition">
+                <i data-lucide="info" class="w-3.5 h-3.5 text-base-400 flex-shrink-0 mt-0.5"></i>
+                <div class="flex-1">
+                    <p id="statusNotificationTitle" class="font-medium text-base-200">ស្ថានភាពប្រព័ន្ធ</p>
+                    <p id="statusNotificationText" class="text-base-400 text-[11px] mt-0.5">ប្រព័ន្ធរួចរាល់សម្រាប់ការងារ។</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right Pane: Main Data Table (Segments Editor) -->
+        <section id="transcriptWorkspacePanel" class="flex-1 min-h-0 min-w-0 flex flex-col bg-base-950 overflow-hidden">
+            <!-- Table Header Bar -->
+            <div class="h-12 px-5 border-b border-base-800 flex items-center justify-between bg-base-900/60 flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="list" class="w-4 h-4 text-base-400"></i>
+                    <h2 class="text-xs font-semibold text-base-200">តារាងកែសម្រួលអត្ថបទ និងសំឡេង (Segments)</h2>
+                    <span id="segmentsCountBadge" class="ml-2 text-[10px] font-mono px-2 py-0.5 rounded bg-base-850 text-base-400 border border-base-800">
+                        0 Segment
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-2">
+                    <!-- Multi-Speaker Quick Controls (Idea 1) -->
+                    <div class="flex items-center gap-1 bg-base-850 p-0.5 rounded border border-base-750 text-[11px]">
+                        <span class="text-base-400 px-1.5 font-medium">🎭 តួអង្គ:</span>
+                        <button id="btnAutoDetectSpeakers" title="វិភាគកម្ពស់សំឡេងដើម្បីណែនាំសំឡេងប្រុស ឬស្រី" class="px-2 py-0.5 rounded bg-base-800 hover:bg-base-700 text-amber-300 font-medium transition flex items-center gap-1 border border-amber-500/30">
+                            <i data-lucide="sparkles" class="w-3 h-3 text-amber-400"></i>
+                            <span>Detect speakers</span>
+                        </button>
+                        <button id="btnAlternateVoices" title="ឆ្លាស់តួអង្គប្រុស/ស្រីស្វ័យប្រវត្តិ" class="px-2 py-0.5 rounded hover:bg-base-750 text-base-300 hover:text-base-100 transition">
+                            ឆ្លាស់ប្រុស/ស្រី
+                        </button>
+                        <button id="btnAllMale" title="កំណត់ទាំងអស់ជាតួប្រុស" class="px-2 py-0.5 rounded hover:bg-base-750 text-base-300 hover:text-base-100 transition">
+                            ប្រុសទាំងអស់
+                        </button>
+                        <button id="btnAllFemale" title="កំណត់ទាំងអស់ជាតួស្រី" class="px-2 py-0.5 rounded hover:bg-base-750 text-base-300 hover:text-base-100 transition">
+                            ស្រីទាំងអស់
+                        </button>
+                    </div>
+
+                    <button id="btnManageSpeakers" type="button" class="px-2.5 py-1 rounded bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition">
+                        គ្រប់គ្រងតួអង្គ
+                    </button>
+
+                    <!-- Add Segment manually -->
+                    <button id="btnAddSegment" class="px-2.5 py-1 rounded bg-base-850 hover:bg-base-800 border border-base-750 text-xs font-medium text-base-300 transition flex items-center gap-1 hover:text-base-100">
+                        <i data-lucide="plus" class="w-3 h-3 text-base-400"></i>
+                        <span>បន្ថែមបន្ទាត់</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="min-h-10 px-4 py-1.5 border-b border-base-800 bg-base-900 flex flex-wrap items-center gap-2 flex-shrink-0">
+                <span class="text-[10px] text-base-400">ស្វែងរក/ជំនួស:</span>
+                <input id="findReplaceText" type="text" placeholder="ពាក្យដែលត្រូវរក" class="w-36 px-2 py-1 rounded bg-base-850 border border-base-750 text-[11px] text-base-100 focus:outline-none focus:border-base-500">
+                <span class="text-[10px] text-base-500">→</span>
+                <input id="findReplaceWith" type="text" placeholder="ជំនួសដោយ" class="w-36 px-2 py-1 rounded bg-base-850 border border-base-750 text-[11px] text-base-100 focus:outline-none focus:border-base-500">
+                <select id="findReplaceScope" class="px-2 py-1 rounded bg-base-850 border border-base-750 text-[11px] text-base-200 focus:outline-none">
+                    <option value="translated_text">អត្ថបទបកប្រែ</option>
+                    <option value="original_text">អត្ថបទដើម</option>
+                    <option value="both">ទាំងពីរ</option>
+                </select>
+                <select id="segmentReviewFilter" aria-label="Filter segments for review" class="px-2 py-1 rounded bg-base-850 border border-base-750 text-[11px] text-base-200 focus:outline-none">
+                    <option value="all">Segments ទាំងអស់</option>
+                    <option value="needs_review">ត្រូវពិនិត្យ</option>
+                    <option value="missing_translation">ខ្វះការបកប្រែ</option>
+                    <option value="missing_audio">ខ្វះសំឡេង</option>
+                    <option value="timing_issue">បញ្ហាពេលវេលា</option>
+                </select>
+                <button id="btnFindReplace" type="button" class="px-2.5 py-1 rounded bg-base-100 hover:bg-base-200 text-base-950 text-[11px] font-semibold transition">ជំនួសទាំងអស់</button>
+                <span id="findReplaceStatus" class="text-[10px] text-base-400"></span>
+                <details id="segmentChecksMenu" class="relative">
+                    <summary class="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-base-750 bg-base-850 text-[11px] font-medium text-base-300 hover:bg-base-800 select-none">
+                        <i data-lucide="list-checks" class="w-3.5 h-3.5 text-base-400"></i>
+                        <span>Segment checks</span>
+                        <i data-lucide="chevron-down" class="w-3.5 h-3.5 text-base-500"></i>
+                    </summary>
+                    <div class="segment-checks-panel absolute right-0 top-[calc(100%+6px)] z-40 flex min-w-[320px] flex-wrap items-center gap-2 rounded-xl border border-base-700 bg-base-900 p-3 shadow-2xl">
+                        <button id="btnCheckTiming" type="button" class="px-2.5 py-1 rounded bg-base-850 hover:bg-base-800 border border-base-750 text-[11px] text-base-200 transition">Check timing</button>
+                        <span id="timingIssueStatus" class="text-[10px] text-base-400">Timing not checked</span>
+                        <button id="btnFixDuplicateSegments" type="button" title="Merge duplicate captions" class="px-2.5 py-1 rounded bg-base-850 hover:bg-base-800 border border-base-750 text-[11px] text-base-200 transition">Fix duplicate captions</button>
+                        <span id="duplicateSegmentStatus" class="text-[10px] text-base-400"></span>
+                        <button id="btnCheckAudioFit" type="button" disabled title="Check dubbed clip timing and readability" class="px-2.5 py-1 rounded bg-base-850 hover:bg-base-800 border border-base-750 text-[11px] text-base-200 transition disabled:opacity-40 disabled:cursor-not-allowed">Check voice fit</button>
+                        <span id="audioFitStatus" class="text-[10px] text-base-400"></span>
+                    </div>
+                </details>
+                <span id="autosaveStatus" class="ml-auto text-[10px] text-base-500">Autosave ready</span>
+            </div>
+
+            <!-- Live Conversion Progress Bar for Long Videos (2+ hours) -->
+            <div id="liveProgressContainer" class="hidden px-5 py-3 border-b border-base-800 bg-base-900 transition-all flex-shrink-0">
+                <div class="flex items-center justify-between text-xs mb-1.5">
+                    <span id="liveProgressTitle" class="font-medium text-base-200 flex items-center gap-2">
+                        <span class="relative flex h-2 w-2">
+                          <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+                          <span class="relative inline-flex rounded-full h-2 w-2 bg-white"></span>
+                        </span>
+                        <span>កំពុងបម្លែងអត្ថបទ (Converting...)</span>
+                    </span>
+                    <span id="liveProgressPercent" class="font-mono font-bold text-base-100 text-xs">0%</span>
+                </div>
+                <div class="w-full bg-base-800 rounded-full h-2 overflow-hidden mb-1.5 border border-base-750">
+                    <div id="liveProgressBar" class="bg-base-100 h-full w-0 transition-all duration-150"></div>
+                </div>
+                <div class="flex items-center justify-between text-[11px] text-base-400">
+                    <span id="liveProgressLatestText" class="truncate max-w-[65%] text-base-300">កំពុងចាប់ផ្តើម...</span>
+                    <span id="liveProgressTime" class="font-mono text-base-400">00:00 / 00:00</span>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="flex-1 min-h-0 p-3.5 flex flex-col overflow-hidden">
+                <div class="flex-1 min-h-0 overflow-y-auto overflow-x-auto rounded-lg border border-base-800 bg-base-900 relative">
+                    <table class="min-w-[1120px] w-full text-left border-collapse text-xs">
+                        <thead class="sticky top-0 z-20 bg-base-850 shadow-sm border-b border-base-800">
+                            <tr class="text-base-400 text-[11px] font-medium">
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-14 text-center">លេខរៀង</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-24">ម៉ោងចាប់ផ្តើម (នាទី:វិនាទី)</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-24">ម៉ោងបញ្ចប់ (នាទី:វិនាទី)</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 min-w-[220px]">អត្ថបទដើម</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 min-w-[250px]">អត្ថបទបកប្រែ</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-32">តួអង្គ</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-44 min-w-[175px]">ទម្រង់សំឡេង</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-24 text-center">ស្ថានភាព</th>
+                                <th class="sticky top-0 z-20 bg-base-850 py-2.5 px-3 w-16 text-center">ស្តាប់</th>
+                            </tr>
+                        </thead>
+                        <tbody id="segmentsTableBody" class="divide-y divide-base-800">
+                            <tr id="tableEmptyRow">
+                                <td colspan="9" class="py-14 text-center text-base-500">
+                                    <i data-lucide="inbox" class="w-7 h-7 mx-auto mb-1.5 text-base-600"></i>
+                                    <p class="text-xs font-medium text-base-300">No captions yet</p>
+                                    <p class="text-[11px] text-base-500 mt-0.5">Load a video and select Transcribe to create captions.</p>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div id="segmentsPagination" class="hidden flex-shrink-0 items-center justify-between pt-2 text-[11px] text-base-400">
+                    <span id="segmentsPageLabel">Page 1 / 1</span>
+                    <div class="flex items-center gap-2">
+                        <button id="btnSegmentsPrev" type="button" class="px-2.5 py-1 rounded border border-base-750 bg-base-850 hover:bg-base-800 disabled:opacity-40 disabled:cursor-not-allowed">Previous</button>
+                        <button id="btnSegmentsNext" type="button" class="px-2.5 py-1 rounded border border-base-750 bg-base-850 hover:bg-base-800 disabled:opacity-40 disabled:cursor-not-allowed">Next</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+        </div>
+
+        <!-- Bottom Fixed Full-Width Timeline Panel -->
+        <div id="timelinePanel" class="relative h-44 border-t border-base-800 bg-base-900 flex flex-col select-none flex-shrink-0 z-20">
+            <div id="timelineResizeHandle" role="separator" aria-orientation="horizontal" aria-label="ទាញកែប្រែកម្ពស់ Timeline" aria-valuemin="130" aria-valuemax="700" tabindex="0" title="ទាញដើម្បីកែប្រែកម្ពស់ Timeline; ប្រើព្រួញឡើង/ចុះក៏បាន" class="group absolute -top-1 left-0 right-0 z-50 h-2 cursor-row-resize touch-none flex items-center justify-center">
+                <span class="h-0.5 w-16 rounded-full bg-base-600 transition group-hover:bg-base-300 group-active:bg-base-100"></span>
+            </div>
+            <!-- Timeline Header & Toolbar -->
+            <div class="h-8 px-3 border-b border-base-800 flex items-center justify-between text-xs bg-base-850 gap-2">
+                <div class="flex items-center gap-2.5 overflow-hidden">
+                    <div class="flex items-center gap-1.5 shrink-0">
+                        <i data-lucide="sliders" class="w-3.5 h-3.5 text-base-400"></i>
+                        <span class="font-medium text-base-200 text-xs">ផ្ទាំងកែសម្រួលពេលវេលា (Timeline)</span>
+                    </div>
+
+                    <!-- Zoom Controls -->
+                    <div class="flex items-center gap-1 bg-base-900 border border-base-750 rounded px-1.5 py-0.5 shrink-0">
+                        <span class="text-[10px] text-base-400">Zoom:</span>
+                        <button id="btnZoomOut" type="button" title="បង្រួម (Zoom Out)" class="w-5 h-5 flex items-center justify-center hover:bg-base-800 rounded text-base-300 hover:text-white font-mono text-xs transition">-</button>
+                        <span id="lblZoomLevel" class="text-[10px] font-mono text-base-200 px-1 select-none">1x</span>
+                        <button id="btnZoomIn" type="button" title="ពង្រីក (Zoom In)" class="w-5 h-5 flex items-center justify-center hover:bg-base-800 rounded text-base-300 hover:text-white font-mono text-xs transition">+</button>
+                        <button id="btnZoomFit" type="button" title="សមនឹងអេក្រង់ (Fit to Screen)" class="px-1.5 h-5 flex items-center justify-center hover:bg-base-800 rounded text-[10px] text-base-400 hover:text-white transition">Fit</button>
+                    </div>
+                    <div class="flex items-center gap-1 bg-base-900 border border-base-750 rounded px-1.5 py-0.5 shrink-0" aria-label="Vertical timeline zoom">
+                        <span class="text-[10px] text-base-400">V:</span>
+                        <button id="btnTimelineVerticalZoomOut" type="button" title="បង្រួមកម្ពស់ track" class="w-5 h-5 flex items-center justify-center hover:bg-base-800 rounded text-base-300 hover:text-white font-mono text-xs transition">−</button>
+                        <span id="lblTimelineVerticalZoom" class="text-[10px] font-mono text-base-200 px-1 select-none">1x</span>
+                        <button id="btnTimelineVerticalZoomIn" type="button" title="ពង្រីកកម្ពស់ track" class="w-5 h-5 flex items-center justify-center hover:bg-base-800 rounded text-base-300 hover:text-white font-mono text-xs transition">+</button>
+                        <button id="btnTimelineVerticalZoomFit" type="button" title="កំណត់កម្ពស់ track ដើម" class="px-1.5 h-5 flex items-center justify-center hover:bg-base-800 rounded text-[10px] text-base-400 hover:text-white transition">Fit</button>
+                    </div>
+
+                    <!-- Timecode badge -->
+                    <span id="timelineCurrentTime" class="font-mono text-[11px] text-amber-300 px-2 py-0.5 rounded bg-base-900 border border-base-800 shrink-0" title="ទីតាំងម៉ោងវីដេអូបច្ចុប្បន្ន">
+                        00:00.00
+                    </span>
+
+                    <!-- Quick Segment Alignment Controls to match with video -->
+                    <div class="flex items-center gap-1 bg-base-900 border border-base-750 rounded px-1.5 py-0.5 text-[11px] shrink-0">
+                        <span id="lblSelectedSegment" class="text-base-400 text-[10px] font-mono px-1 border-r border-base-800 truncate max-w-[130px]" title="ចុចលើ Segment លើ Timeline ឬក្នុងតារាងដើម្បីជ្រើសរើស">គ្មានជម្រើស</span>
+                        <button id="btnSetStartToCurrent" type="button" title="កំណត់ពេលចាប់ផ្តើមនៃ Segment តាមវីដេអូបច្ចុប្បន្ន (ចុចគ្រាប់ចុច [ ឬ I)" class="px-1.5 py-0.5 hover:bg-base-800 text-emerald-400 hover:text-emerald-300 rounded font-medium transition text-[10px] flex items-center gap-0.5">
+                            <span class="font-mono">[</span>
+                            <span>Start</span>
+                        </button>
+                        <button id="btnSetEndToCurrent" type="button" title="កំណត់ពេលបញ្ចប់នៃ Segment តាមវីដេអូបច្ចុប្បន្ន (ចុចគ្រាប់ចុច ] ឬ O)" class="px-1.5 py-0.5 hover:bg-base-800 text-emerald-400 hover:text-emerald-300 rounded font-medium transition text-[10px] flex items-center gap-0.5">
+                            <span>End</span>
+                            <span class="font-mono">]</span>
+                        </button>
+                        <div class="h-3 w-px bg-base-800 mx-0.5"></div>
+                        <button id="btnNudgeLeft" type="button" title="រំកិល Segment ថយក្រោយ 0.1s (ចុច Alt+ឆ្វេង)" class="px-1.5 py-0.5 hover:bg-base-800 text-base-300 hover:text-white rounded font-mono text-[10px] transition">◀ -0.1s</button>
+                        <button id="btnNudgeRight" type="button" title="រំកិល Segment ទៅមុខ 0.1s (ចុច Alt+ស្តាំ)" class="px-1.5 py-0.5 hover:bg-base-800 text-base-300 hover:text-white rounded font-mono text-[10px] transition">+0.1s ▶</button>
+                        <div class="h-3 w-px bg-base-800 mx-0.5"></div>
+                        <!-- Direct Edit & Split Controls -->
+                        <button id="btnEditSelected" type="button" title="កែសម្រួលអត្ថបទ និងម៉ោង (ចុច ២ ដងលើ Segment ឬចុច Enter)" class="px-2 py-0.5 rounded bg-amber-400 hover:bg-amber-300 text-base-950 font-semibold transition text-[10px] flex items-center gap-1 shadow-sm">
+                            <i data-lucide="edit-3" class="w-3 h-3 text-base-950"></i>
+                            <span>✏️ កែប្រែ</span>
+                        </button>
+                        <button id="btnSplitAtPlayhead" type="button" title="ពុះ Segment ជាពីរត្រង់ Playhead (ចុច C ឬ S)" class="px-1.5 py-0.5 hover:bg-base-800 text-base-300 hover:text-white rounded text-[10px] transition flex items-center gap-0.5">
+                            <i data-lucide="scissors" class="w-3 h-3 text-base-400"></i>
+                            <span>ពុះ</span>
+                        </button>
+                        <button id="btnDeleteSelected" type="button" title="លុប Segment នេះ (ចុច Delete)" class="px-1.5 py-0.5 hover:bg-red-950/60 text-red-400 hover:text-red-300 rounded text-[10px] transition">
+                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                        </button>
+                        <div class="h-3 w-px bg-base-800 mx-0.5"></div>
+                        <button id="btnShiftAll" type="button" title="រំកិលពេលវេលានៃ Segment ទាំងអស់ស្មើគ្នា (Shift All)" class="px-1.5 py-0.5 hover:bg-base-800 text-amber-300 hover:text-amber-200 rounded text-[10px] transition flex items-center gap-1">
+                            <i data-lucide="move-horizontal" class="w-3 h-3"></i>
+                            <span>រំកិលទាំងអស់</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="flex items-center gap-1.5 text-[10px] text-base-400 shrink-0" aria-label="Timeline layer visibility">
+                    <span class="mr-0.5">Layers:</span>
+                    <button type="button" data-timeline-layer="text" aria-pressed="true" class="px-2 py-1 rounded border border-base-750 bg-base-800 text-base-200 hover:bg-base-750 transition">Text</button>
+                    <button type="button" data-timeline-layer="voice" aria-pressed="true" class="px-2 py-1 rounded border border-base-750 bg-base-800 text-base-200 hover:bg-base-750 transition">AI Voice</button>
+                    <button type="button" data-timeline-layer="background" aria-pressed="true" class="px-2 py-1 rounded border border-base-750 bg-base-800 text-base-200 hover:bg-base-750 transition">BG Audio</button>
+                </div>
+            </div>
+
+            <!-- Timeline Body: Fixed Left Track Headers + Horizontally Scrollable Tracks -->
+            <div id="timelineBody" class="flex-1 min-h-0 flex overflow-y-auto overflow-x-hidden relative">
+                <!-- 1. Fixed Left Track Labels (Stays fixed when scrolling horizontally!) -->
+                <div id="timelineTrackLabels" class="w-32 flex-shrink-0 bg-base-900 border-r border-base-800 flex flex-col justify-start gap-2 py-1 px-3 text-[11px] font-medium text-base-400 select-none z-10 shadow-md">
+                    <div class="h-4 flex items-center text-[10px] text-base-500 font-mono">
+                        <i data-lucide="clock" class="w-3 h-3 mr-1 text-base-500"></i>
+                        <span>រង្វាស់ម៉ោង</span>
+                    </div>
+                    <div id="timelineTextLabel" class="timeline-lane-label h-7 flex items-center gap-1.5 truncate">
+                        <i data-lucide="file-text" class="w-3 h-3 text-base-400"></i>
+                        <span>អត្ថបទ (Text)</span>
+                    </div>
+                    <div id="timelineVoiceLabel" class="timeline-lane-label h-7 flex items-center gap-1.5 truncate">
+                        <i data-lucide="mic" class="w-3 h-3 text-base-400"></i>
+                        <span>សំឡេង AI</span>
+                    </div>
+                    <div id="timelineBackgroundLabel" class="timeline-lane-label h-7 flex items-center gap-1.5 truncate">
+                        <i data-lucide="music" class="w-3 h-3 text-base-400"></i>
+                        <span>ផ្ទៃក្រោយ (BG)</span>
+                    </div>
+                </div>
+
+                <!-- 2. Horizontally Scrollable Tracks Field -->
+                <div id="timelineContainer" class="flex-1 flex-shrink-0 overflow-x-auto overflow-y-hidden bg-base-950 relative cursor-pointer">
+                    <!-- Dynamic Tracks Content (Expands horizontally with zoom) -->
+                    <div id="timelineContentWrapper" class="relative h-full py-1 min-w-full flex flex-col justify-start gap-2" style="width: 100%;">
+                        <!-- Time Ruler Row -->
+                        <div id="timelineTimeRuler" class="h-4 w-full relative border-b border-base-800/80 pointer-events-none select-none">
+                            <!-- Time markers injected dynamically -->
+                        </div>
+
+                        <!-- Track 1: Text -->
+                        <div id="trackText" data-timeline-layer-row="text" class="h-7 w-full rounded bg-base-900/80 border border-base-800 relative overflow-hidden">
+                            <!-- Segment blocks injected dynamically -->
+                        </div>
+
+                        <!-- Track 2: AI Voice -->
+                        <div id="trackVoice" data-timeline-layer-row="voice" class="h-7 w-full rounded bg-base-900/80 border border-base-800 relative overflow-hidden">
+                            <!-- Voice blocks injected dynamically -->
+                        </div>
+
+                        <!-- Track 3: Background Audio -->
+                        <div id="trackBg" data-timeline-layer-row="background" class="h-7 w-full rounded bg-base-900/80 border border-base-800 relative overflow-hidden flex items-center px-1">
+                            <div class="w-full h-2 rounded bg-base-800/80 border border-base-750 relative">
+                                <div class="absolute inset-0 bg-base-700/50 rounded"></div>
+                            </div>
+                        </div>
+
+                        <!-- Dynamic Playhead line spanning top to bottom across all tracks -->
+                        <div id="timelinePlayhead" class="absolute top-0 bottom-0 w-0.5 bg-red-500 z-30 pointer-events-none transition-[left] duration-75 left-0 shadow-lg">
+                            <div class="w-2.5 h-2.5 bg-red-500 -ml-1 -top-0.5 rounded-full absolute shadow-md"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Settings Modal (ការកំណត់ - Clean Simple Modal) -->
+    <div id="settingsModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md max-h-[90vh] overflow-y-auto bg-base-900 border border-base-750 rounded-xl p-5 shadow-xl relative">
+            <div class="flex items-center justify-between pb-3.5 border-b border-base-800">
+                <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg bg-base-800 border border-base-700 flex items-center justify-center">
+                        <i data-lucide="key" class="w-3.5 h-3.5 text-base-300"></i>
+                    </div>
+                    <h3 class="text-sm font-semibold text-base-100">ការកំណត់ប្រព័ន្ធ (Settings)</h3>
+                </div>
+                <button id="btnCloseSettingsModal" class="p-1 rounded text-base-400 hover:text-white hover:bg-base-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="py-4 space-y-3.5 text-xs">
+                <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                        <label class="text-base-300 font-medium">
+                            Google Gemini API Key
+                        </label>
+                        <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-[11px] text-blue-400 hover:underline flex items-center gap-1">
+                            <span>យក API Key ឥតគិតថ្លៃ (AI Studio)</span>
+                            <i data-lucide="external-link" class="w-3 h-3"></i>
+                        </a>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input type="password" id="geminiApiKeyInput" placeholder="បញ្ចូល AIzaSy..." class="flex-1 px-3 py-2 rounded-lg bg-base-850 border border-base-750 text-white text-xs focus:outline-none focus:border-base-500 font-mono transition">
+                        <button id="btnTestKey" type="button" class="px-3 py-2 rounded-lg bg-base-800 hover:bg-base-750 text-amber-300 border border-base-700 font-medium text-xs transition flex items-center gap-1.5 shrink-0">
+                            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+                            <span>តេស្តសោ</span>
+                        </button>
+                    </div>
+                    <p id="testKeyStatus" class="text-[11px] mt-1.5 hidden"></p>
+                    <p class="text-base-400 text-[11px] mt-1.5 leading-relaxed">
+                        ប្រើ Gemini API Key ពី Google AI Studio (មិនមែន OAuth access token)។ សោនេះត្រូវបានរក្សាទុកក្នុង browser នេះ។
+                    </p>
+                </div>
+
+                <div>
+                    <label class="block text-base-300 font-medium mb-1.5">
+                        ម៉ូដែល Gemini AI (Model Selection)
+                    </label>
+                    <select id="geminiModelSelect" class="w-full px-3 py-2 rounded-lg bg-base-850 border border-base-750 text-white text-xs focus:outline-none focus:border-base-500 font-mono transition">
+                        <option value="gemini-3.8-flash">gemini-3.8-flash (លឿន និងណែនាំ)</option>
+                        <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+                        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (សន្សំសំចៃ)</option>
+                        <option value="gemini-3.1-flash-lite">gemini-3.1-flash-lite</option>
+                    </select>
+                    <p class="text-base-400 text-[11px] mt-1">ប្រសិនបើម៉ូដែលមួយមិនដំណើរការ ប្រព័ន្ធនឹងប្តូរទៅម៉ូដែលជំនួសដោយស្វ័យប្រវត្តិ។</p>
+                </div>
+
+                <div>
+                    <label class="block text-base-300 font-medium mb-1.5">
+                        ទឹកដមនៃការបកប្រែ (Translation Tone & Style)
+                    </label>
+                    <select id="translationToneSelect" class="w-full px-3 py-2 rounded-lg bg-base-850 border border-base-750 text-white text-xs focus:outline-none focus:border-base-500 transition">
+                        <option value="conversational">ការសន្ទនាបែបធម្មជាតិ (Conversational / Standard - ណែនាំ)</option>
+                        <option value="storytelling">និទានរឿង / សង្ខេបរឿងភាពយន្ត (Dramatic Storytelling / Narration)</option>
+                        <option value="formal">ផ្លូវការ / ព័ត៌មាន និងឯកសារ (Formal / Professional / Documentary)</option>
+                        <option value="comedy">កំប្លែង / កម្សាន្តសម័យទំនើប (Humorous / Entertaining)</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-base-300 font-medium mb-1.5">
+                        វចនានុក្រមពាក្យពិសេស (Custom Glossary / Terminology)
+                    </label>
+                    <textarea id="customGlossaryInput" rows="2" placeholder="ឧទាហរណ៍៖&#10;Tony Stark = ថូនី ស្តាក&#10;AI = អាយអាយ" class="w-full px-3 py-2 rounded-lg bg-base-850 border border-base-750 text-white text-xs focus:outline-none focus:border-base-500 font-mono resize-none transition"></textarea>
+                    <p class="text-base-400 text-[11px] mt-1">កំណត់ឈ្មោះ ឬពាក្យបច្ចេកទេសដែលចង់ឱ្យ Gemini បកប្រែតាមនេះជានិច្ច។</p>
+                </div>
+
+                <div class="pt-2 border-t border-base-800 space-y-2">
+                    <label class="block text-base-300 font-medium">
+                        កែសម្រួលសំនៀងសំឡេងនិយាយ (Voice Fine-Tuning)
+                    </label>
+                    <div class="grid grid-cols-2 gap-2 text-[11px]">
+                        <div class="bg-base-850 p-2 rounded-lg border border-base-800 space-y-1.5">
+                            <span class="text-base-200 font-medium block">👨 Piseth (ប្រុស)</span>
+                            <div class="flex items-center justify-between">
+                                <span class="text-base-400">ល្បឿន:</span>
+                                <div class="flex items-center gap-1">
+                                    <input type="number" id="maleRateInput" min="-30" max="50" step="5" value="0" class="w-14 px-1 py-0.5 rounded bg-base-900 border border-base-750 text-center text-xs font-mono">
+                                    <span class="text-base-500">%</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-base-400">Pitch:</span>
+                                <div class="flex items-center gap-1">
+                                    <input type="number" id="malePitchInput" min="-50" max="50" step="5" value="0" class="w-14 px-1 py-0.5 rounded bg-base-900 border border-base-750 text-center text-xs font-mono">
+                                    <span class="text-base-500">Hz</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="bg-base-850 p-2 rounded-lg border border-base-800 space-y-1.5">
+                            <span class="text-base-200 font-medium block">👩 Sreymom (ស្រី)</span>
+                            <div class="flex items-center justify-between">
+                                <span class="text-base-400">ល្បឿន:</span>
+                                <div class="flex items-center gap-1">
+                                    <input type="number" id="femaleRateInput" min="-30" max="50" step="5" value="0" class="w-14 px-1 py-0.5 rounded bg-base-900 border border-base-750 text-center text-xs font-mono">
+                                    <span class="text-base-500">%</span>
+                                </div>
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <span class="text-base-400">Pitch:</span>
+                                <div class="flex items-center gap-1">
+                                    <input type="number" id="femalePitchInput" min="-50" max="50" step="5" value="0" class="w-14 px-1 py-0.5 rounded bg-base-900 border border-base-750 text-center text-xs font-mono">
+                                    <span class="text-base-500">Hz</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3.5 border-t border-base-800">
+                <button id="btnCancelSettings" class="px-3.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 text-base-300 font-medium text-xs transition border border-base-750">
+                    បោះបង់
+                </button>
+                <button id="btnSaveKey" class="px-4 py-1.5 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 font-semibold text-xs transition flex items-center gap-1.5">
+                    <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                    <span>រក្សាទុកសោ</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Automatic vertical clip editor -->
+    <div id="autoReelModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md max-h-[90vh] overflow-y-auto bg-base-900 border border-base-750 rounded-xl p-5 shadow-xl relative" role="dialog" aria-modal="true" aria-labelledby="autoReelTitle">
+            <div class="flex items-center justify-between pb-3.5 border-b border-base-800">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="scissors" class="w-4 h-4 text-base-300"></i>
+                    <h3 id="autoReelTitle" class="text-sm font-semibold text-base-100">Auto Reel Maker</h3>
+                </div>
+                <button id="btnCloseAutoReel" type="button" aria-label="Close" class="p-1 rounded text-base-400 hover:text-white hover:bg-base-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+            <div class="py-4 space-y-4 text-xs">
+                <p class="text-[11px] leading-relaxed text-base-400">Finds dialogue-dense moments in the loaded video, creates separate vertical 9:16 clips, and uses translated captions when available. Use footage you own or have permission to edit and share.</p>
+                <div class="grid grid-cols-2 gap-3">
+                    <label class="block text-base-300 font-medium">Number of clips
+                        <select id="autoReelCount" class="mt-1.5 w-full px-2.5 py-2 rounded-lg bg-base-850 border border-base-750 text-xs text-base-100">
+                            <option value="1">1 clip</option>
+                            <option value="2">2 clips</option>
+                            <option value="3" selected>3 clips</option>
+                            <option value="4">4 clips</option>
+                            <option value="5">5 clips</option>
+                        </select>
+                    </label>
+                    <label class="block text-base-300 font-medium">Clip length
+                        <select id="autoReelLength" class="mt-1.5 w-full px-2.5 py-2 rounded-lg bg-base-850 border border-base-750 text-xs text-base-100">
+                            <option value="15">15 seconds</option>
+                            <option value="30" selected>30 seconds</option>
+                            <option value="45">45 seconds</option>
+                            <option value="60">60 seconds</option>
+                            <option value="90">90 seconds</option>
+                        </select>
+                    </label>
+                </div>
+                <label class="flex items-center gap-2 text-[11px] text-base-300">
+                    <input id="autoReelCaptions" type="checkbox" checked class="accent-zinc-300">
+                    Burn captions into the clips
+                </label>
+                <label class="flex items-start gap-2 text-[11px] text-base-300">
+                    <input id="autoReelRemoveDialogue" type="checkbox" class="mt-0.5 accent-zinc-300">
+                    <span>Remove dialogue and keep music/effects (uses optional Demucs separation)</span>
+                </label>
+                <label class="flex items-start gap-2 text-[11px] text-base-300">
+                    <input id="autoReelBlurCaptions" type="checkbox" class="mt-0.5 accent-zinc-300">
+                    <span>Blur the bottom 20% of the source to hide burned-in captions</span>
+                </label>
+                <p class="text-[10px] text-base-500">Transcribe the video first. The editor scores moments using caption timing and dialogue density; it does not judge story meaning.</p>
+                <div id="autoReelProgress" class="hidden rounded-lg border border-base-800 bg-base-850 p-3 text-[11px] text-base-300" role="status">Preparing your clips…</div>
+                <div id="autoReelResults" class="hidden rounded-lg border border-base-800 bg-base-850 p-3">
+                    <p class="font-medium text-base-200 mb-2">Your clips</p>
+                    <ul id="autoReelResultList" class="space-y-2"></ul>
+                </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-3.5 border-t border-base-800">
+                <button id="btnCancelAutoReel" type="button" class="px-3.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 text-base-300 font-medium text-xs transition border border-base-750">Cancel</button>
+                <button id="btnCreateAutoReels" type="button" class="px-4 py-1.5 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 font-semibold text-xs transition flex items-center gap-1.5">
+                    <i data-lucide="wand-sparkles" class="w-3.5 h-3.5"></i>
+                    Make clips
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Export Modal (Clean Simple Modal) -->
+    <div id="exportModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md max-h-[90vh] overflow-y-auto bg-base-900 border border-base-750 rounded-xl p-5 shadow-xl relative">
+            <div class="flex items-center justify-between pb-3.5 border-b border-base-800">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="download" class="w-4 h-4 text-base-300"></i>
+                    <h3 class="text-sm font-semibold text-base-100">ជម្រើសនាំចេញវីដេអូ (Export Video)</h3>
+                </div>
+                <button id="btnCloseExportModal" class="p-1 rounded text-base-400 hover:text-white hover:bg-base-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="py-4 space-y-3.5 text-xs">
+                <div class="rounded-lg border border-base-800 bg-base-850 p-3">
+                    <div class="flex items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="clipboard-check" class="h-4 w-4 text-base-300"></i>
+                            <span class="font-medium text-base-200">ពិនិត្យគុណភាពមុននាំចេញ</span>
+                        </div>
+                        <button id="btnRefreshExportCheck" type="button" class="rounded border border-base-700 px-2 py-1 text-[10px] text-base-300 transition hover:bg-base-800">ពិនិត្យម្ដងទៀត</button>
+                    </div>
+                    <p id="exportPreflightSummary" class="mt-2 text-[11px] text-base-400">កំពុងពិនិត្យ...</p>
+                    <ul id="exportPreflightList" class="mt-2 space-y-1 text-[10px]"></ul>
+                </div>
+                <div class="rounded-lg border border-base-800 bg-base-850 p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <span class="text-base-200 font-medium">ពិនិត្យសិទ្ធិមុនបង្ហោះ (Pre-post rights review)</span>
+                        <span id="rightsReviewProgress" class="text-[10px] text-base-400">0 / 4</span>
+                    </div>
+                    <p class="text-[10px] text-base-400">បញ្ជីរំលឹកដោយដៃប៉ុណ្ណោះ—មិនមែនការស្កេនរក copyright ដោយស្វ័យប្រវត្តិទេ។ ការនាំចេញនៅតែអាចធ្វើបាន។</p>
+                    <label class="flex items-start gap-2 text-[11px] text-base-300 cursor-pointer">
+                        <input type="checkbox" data-rights-key="footage" class="mt-0.5 accent-zinc-400">
+                        <span>ខ្ញុំមានសិទ្ធិប្រើវីដេអូ និងឃ្លីបដែលបានបញ្ចូល</span>
+                    </label>
+                    <label class="flex items-start gap-2 text-[11px] text-base-300 cursor-pointer">
+                        <input type="checkbox" data-rights-key="audio" class="mt-0.5 accent-zinc-400">
+                        <span>តន្ត្រី និងសំឡេងដែលមានក្នុងលទ្ធផល ត្រូវបានអនុញ្ញាត ឬដកចេញ</span>
+                    </label>
+                    <label class="flex items-start gap-2 text-[11px] text-base-300 cursor-pointer">
+                        <input type="checkbox" data-rights-key="third_party" class="mt-0.5 accent-zinc-400">
+                        <span>បានពិនិត្យរូបភាព ឡូហ្គោ សំឡេង និងសម្ភារៈភាគីទីបី</span>
+                    </label>
+                    <label class="flex items-start gap-2 text-[11px] text-base-300 cursor-pointer">
+                        <input type="checkbox" data-rights-key="license_terms" class="mt-0.5 accent-zinc-400">
+                        <span>បានគោរពលក្ខខណ្ឌអាជ្ញាប័ណ្ណ និងការដាក់ប្រភព ប្រសិនបើត្រូវការ</span>
+                    </label>
+                    <textarea id="rightsReviewNotes" rows="2" placeholder="កត់ត្រាប្រភព ឬព័ត៌មានអាជ្ញាប័ណ្ណ (ជាជម្រើស)" class="w-full px-2 py-1.5 rounded bg-base-900 border border-base-750 text-[11px] text-base-200 resize-y"></textarea>
+                </div>
+
+                <div>
+                    <label class="block text-base-300 font-medium mb-2">សំឡេងផ្ទៃខាងក្រោយ (Background Sound Mode)</label>
+                    <div class="space-y-2">
+                        <label class="flex items-center gap-2.5 p-2.5 rounded-lg bg-base-850 border border-base-800 cursor-pointer hover:border-base-750">
+                            <input type="radio" name="exportAudioOption" value="sidechain" checked class="accent-zinc-400">
+                            <div>
+                                <p class="text-base-200 font-medium flex items-center gap-1.5">
+                                    <span>Smart Auto-Ducking (Sidechain)</span>
+                                    <span class="text-[10px] px-1.5 py-0.2 rounded bg-zinc-800 text-zinc-300 border border-zinc-700">ណែនាំ</span>
+                                </p>
+                                <p class="text-base-400 text-[11px]">បន្ថយសំឡេងភ្លេងដើមស្វ័យប្រវត្តិតែពេល AI និយាយ ហើយត្រឡប់មកពេញវិញពេលស្ងាត់</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2.5 p-2.5 rounded-lg bg-base-850 border border-base-800 cursor-pointer hover:border-base-750">
+                            <input type="radio" name="exportAudioOption" value="duck_static" class="accent-zinc-400">
+                            <div>
+                                <p class="text-base-200 font-medium">បន្ថយសំឡេងដើមថេរ (Static Volume 15%)</p>
+                                <p class="text-base-400 text-[11px]">រក្សាតន្ត្រីផ្ទៃខាងក្រោយដើមតិចៗ ១៥% ស្មើពេញមួយវីដេអូ</p>
+                            </div>
+                        </label>
+                        <label class="flex items-center gap-2.5 p-2.5 rounded-lg bg-base-850 border border-base-800 cursor-pointer hover:border-base-750">
+                            <input type="radio" name="exportAudioOption" value="mute" class="accent-zinc-400">
+                            <div>
+                                <p class="text-base-200 font-medium">បិទសំឡេងដើមទាំងស្រុង (Mute Original)</p>
+                                <p class="text-base-400 text-[11px]">ចាក់តែសំឡេងនិយាយបញ្ចូលថ្មី (AI Dubbing) តែប៉ុណ្ណោះ</p>
+                            </div>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Burn-in Subtitles option & Customizer -->
+                <div class="pt-2 border-t border-base-800 space-y-2">
+                    <label class="flex items-center gap-2.5 p-2.5 rounded-lg bg-base-850 border border-base-800 cursor-pointer hover:border-base-750">
+                        <input type="checkbox" id="chkBurnSubtitles" class="accent-zinc-400 w-4 h-4 rounded">
+                        <div>
+                            <p class="text-base-200 font-medium">ដុតអក្សររត់លើវីដេអូ (Burn-in Styled Subtitles)</p>
+                            <p class="text-base-400 text-[11px]">បង្កប់ Subtitle ខ្មែរស្អាតៗលើវីដេអូ</p>
+                        </div>
+                    </label>
+
+                    <!-- Subtitle Style Customizer -->
+                    <div id="subStylerPanel" class="hidden p-3 rounded-lg bg-base-850 border border-base-800 space-y-2 text-[11px]">
+                        <span class="text-base-300 font-medium block">🎨 កំណត់រចនាប័ទ្ម Subtitle (Style Customizer)</span>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div>
+                                <span class="text-base-400 block mb-1">ទំហំអក្សរ (Size):</span>
+                                <select id="exportSubFontSize" class="w-full px-2 py-1 rounded bg-base-900 border border-base-750 text-xs text-base-200">
+                                    <option value="16">16px (តូច)</option>
+                                    <option value="20" selected>20px (មធ្យម - ណែនាំ)</option>
+                                    <option value="24">24px (ធំ ច្បាស់)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span class="text-base-400 block mb-1">ពណ៌អក្សរ (Color):</span>
+                                <select id="exportSubColor" class="w-full px-2 py-1 rounded bg-base-900 border border-base-750 text-xs text-base-200">
+                                    <option value="white" selected>⚪ ពណ៌ស (White)</option>
+                                    <option value="yellow">🟡 ពណ៌លឿង (Cinema Yellow)</option>
+                                    <option value="cyan">🔵 ពណ៌ខៀវស្រាល (Cyan)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span class="text-base-400 block mb-1">ទម្រង់ផ្ទៃ (Box / Outline):</span>
+                                <select id="exportSubStyle" class="w-full px-2 py-1 rounded bg-base-900 border border-base-750 text-xs text-base-200">
+                                    <option value="box" selected>ប្រអប់ខ្មៅថ្លា (Netflix Box)</option>
+                                    <option value="outline">អក្សរមានគែមខ្មៅ (Drop Stroke)</option>
+                                </select>
+                            </div>
+                            <div>
+                                <span class="text-base-400 block mb-1">ទីតាំង (Position):</span>
+                                <select id="exportSubPosition" class="w-full px-2 py-1 rounded bg-base-900 border border-base-750 text-xs text-base-200">
+                                    <option value="bottom" selected>បាតក្រោម (Bottom)</option>
+                                    <option value="center">កណ្តាល (Center)</option>
+                                    <option value="top">ខាងលើ (Top - TikTok/Reels)</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="exportProgressContainer" class="hidden">
+                    <p class="text-base-300 mb-1 text-[11px] font-medium" id="exportProgressText">កំពុងដំណើរការ FFmpeg...</p>
+                    <div class="w-full bg-base-800 rounded-full h-1.5 overflow-hidden">
+                        <div class="bg-base-300 h-full w-full animate-pulse"></div>
+                    </div>
+                </div>
+
+                <div id="exportSuccessContainer" class="hidden p-3 rounded-lg bg-base-850 border border-base-750 text-base-200 text-center">
+                    <i data-lucide="check-circle" class="w-5 h-5 text-base-300 mx-auto mb-1"></i>
+                    <p class="font-medium text-xs">ការនាំចេញបានជោគជ័យ!</p>
+                    <a id="exportDownloadLink" href="#" target="_blank" download class="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 font-semibold text-xs transition">
+                        <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                        <span>ទាញយកវីដេអូ</span>
+                    </a>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3.5 border-t border-base-800">
+                <button id="btnCancelExport" class="px-3.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 text-base-300 font-medium text-xs transition border border-base-750">
+                    បិទ
+                </button>
+                <button id="btnConfirmExport" class="px-4 py-1.5 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 font-semibold text-xs transition flex items-center gap-1.5">
+                    <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                    <span>ចាប់ផ្តើមនាំចេញ</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Social publishing modal -->
+    <div id="publisherModal" class="fixed inset-0 z-[75] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-sm" role="presentation">
+        <section class="w-full max-w-3xl max-h-[92vh] overflow-y-auto rounded-2xl border border-base-700 bg-base-900 p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="publisherTitle">
+            <div class="mb-4 flex items-start justify-between gap-3 border-b border-base-800 pb-3">
+                <div>
+                    <h2 id="publisherTitle" class="text-sm font-semibold text-base-100">កំណត់ពេលផុស YouTube Shorts / Facebook Reels</h2>
+                    <p class="mt-1 text-[11px] text-base-400">ភ្ជាប់គណនីរបស់អ្នក រួចផុសភ្លាម ឬកំណត់ពេលវេលា។ វីដេអូនឹងត្រូវផ្ញើពីកុំព្យូទ័រនេះទៅកាន់គណនីដែលបានជ្រើស។</p>
+                </div>
+                <button id="btnClosePublisher" type="button" class="rounded p-1 text-base-400 hover:bg-base-800 hover:text-white" aria-label="បិទ"><i data-lucide="x" class="h-4 w-4"></i></button>
+            </div>
+
+            <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <section class="rounded-xl border border-base-800 bg-base-850 p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="text-xs font-semibold text-base-200">YouTube</h3>
+                        <span id="youtubeConnectionStatus" class="text-[10px] text-amber-300">មិនទាន់ភ្ជាប់</span>
+                    </div>
+                    <input id="googleOAuthClientInput" type="file" accept=".json,application/json" class="hidden">
+                    <div class="flex flex-wrap gap-2">
+                        <button id="btnChooseGoogleClient" type="button" class="rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-300 hover:bg-base-800">ជ្រើស Google OAuth JSON</button>
+                        <button id="btnConnectYoutube" type="button" class="rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-300 hover:bg-base-800">ភ្ជាប់ YouTube</button>
+                        <button id="btnDisconnectYoutube" type="button" class="hidden rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-400 hover:bg-base-800">ផ្តាច់</button>
+                    </div>
+                    <p class="text-[10px] leading-relaxed text-base-500">ត្រូវការ Google Cloud project ដែលបើក YouTube Data API v3 និង OAuth Desktop client។</p>
+                </section>
+
+                <section class="rounded-xl border border-base-800 bg-base-850 p-3 space-y-2">
+                    <div class="flex items-center justify-between gap-2">
+                        <h3 class="text-xs font-semibold text-base-200">Facebook Page</h3>
+                        <span id="facebookConnectionStatus" class="text-[10px] text-amber-300">មិនទាន់ភ្ជាប់</span>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <input id="metaAppIdInput" type="text" autocomplete="off" placeholder="Meta App ID" class="min-w-0 rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-100 placeholder:text-base-600">
+                        <input id="metaAppSecretInput" type="password" autocomplete="new-password" placeholder="Meta App Secret" class="min-w-0 rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-100 placeholder:text-base-600">
+                    </div>
+                    <div class="flex flex-wrap gap-2">
+                        <button id="btnSaveMetaConfig" type="button" class="rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-300 hover:bg-base-800">រក្សាទុក App</button>
+                        <button id="btnConnectFacebook" type="button" class="rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-300 hover:bg-base-800">ភ្ជាប់ Facebook</button>
+                        <button id="btnDisconnectFacebook" type="button" class="hidden rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-400 hover:bg-base-800">ផ្តាច់</button>
+                    </div>
+                    <p class="text-[10px] leading-relaxed text-base-500">Meta App ត្រូវមាន Facebook Login។ Callback URL៖ <code id="metaCallbackUri" class="break-all text-base-300">http://127.0.0.1:8000/api/publisher/meta/callback</code></p>
+                    <select id="facebookPageSelect" class="hidden w-full rounded-lg border border-base-700 bg-base-900 px-2.5 py-1.5 text-[11px] text-base-100"></select>
+                </section>
+            </div>
+
+            <div class="mt-4 space-y-3 border-t border-base-800 pt-4">
+                <div>
+                    <label for="publisherVideoSelect" class="mb-1 block text-[11px] font-medium text-base-300">វីដេអូដែលបាននាំចេញ</label>
+                    <div class="flex gap-2">
+                        <select id="publisherVideoSelect" class="min-w-0 flex-1 rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-xs text-base-100"><option value="">កំពុងរកវីដេអូ...</option></select>
+                        <button id="btnRefreshPublisherVideos" type="button" class="rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-[11px] text-base-300 hover:bg-base-800">ធ្វើបច្ចុប្បន្នភាព</button>
+                    </div>
+                </div>
+                <div class="flex flex-wrap items-center gap-4 text-[11px] text-base-300">
+                    <label class="flex items-center gap-2"><input id="publisherTargetYoutube" type="checkbox" checked class="accent-zinc-300">YouTube Shorts / video</label>
+                    <label class="flex items-center gap-2"><input id="publisherTargetFacebook" type="checkbox" checked class="accent-zinc-300">Facebook Page Reel</label>
+                    <span class="text-base-500">Facebook Reels ត្រូវការ 9:16, 540×960+, 3–90 វិនាទី។</span>
+                </div>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                        <label for="publisherTitleInput" class="mb-1 block text-[11px] font-medium text-base-300">ចំណងជើង</label>
+                        <input id="publisherTitleInput" type="text" maxlength="100" placeholder="ចំណងជើងវីដេអូ" class="w-full rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-xs text-base-100 placeholder:text-base-600">
+                    </div>
+                    <div>
+                        <label for="publisherTagsInput" class="mb-1 block text-[11px] font-medium text-base-300">Tags (បំបែកដោយក្បៀស)</label>
+                        <input id="publisherTagsInput" type="text" placeholder="shorts, comedy, ..." class="w-full rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-xs text-base-100 placeholder:text-base-600">
+                    </div>
+                </div>
+                <div>
+                    <label for="publisherDescriptionInput" class="mb-1 block text-[11px] font-medium text-base-300">ការពិពណ៌នា / caption</label>
+                    <textarea id="publisherDescriptionInput" rows="3" maxlength="5000" class="w-full resize-y rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-xs text-base-100"></textarea>
+                </div>
+                <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div>
+                        <label for="publisherScheduleInput" class="mb-1 block text-[11px] font-medium text-base-300">កំណត់ម៉ោងផុស (ទុកទទេ = ផុសឥឡូវ)</label>
+                        <input id="publisherScheduleInput" type="datetime-local" step="60" class="w-full rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-xs text-base-100">
+                    </div>
+                    <div id="youtubePrivacyWrap">
+                        <label for="youtubePrivacySelect" class="mb-1 block text-[11px] font-medium text-base-300">YouTube privacy (ផុសភ្លាម)</label>
+                        <select id="youtubePrivacySelect" class="w-full rounded-lg border border-base-700 bg-base-850 px-3 py-2 text-xs text-base-100"><option value="public">Public</option><option value="unlisted">Unlisted</option><option value="private">Private</option></select>
+                    </div>
+                </div>
+                <div class="flex flex-col gap-2 rounded-lg border border-base-800 bg-base-850 p-3">
+                    <label class="flex items-start gap-2 text-[11px] text-base-300"><input id="publisherAiDisclosure" type="checkbox" checked class="mt-0.5 accent-zinc-300"><span>សម្គាល់ថាវីដេអូនេះមានការបង្កើត/កែប្រែដោយ AI (YouTube និង Facebook disclosure)</span></label>
+                    <label class="flex items-start gap-2 text-[11px] text-base-300"><input id="publisherRightsConfirm" type="checkbox" class="mt-0.5 accent-zinc-300"><span>ខ្ញុំមានសិទ្ធិ និងបានពិនិត្យមុនផុសវីដេអូនេះ។</span></label>
+                </div>
+                <div id="publisherProgress" class="hidden rounded-lg border border-base-800 bg-base-850 p-3 text-[11px] text-base-300">កំពុងបញ្ជូនវីដេអូទៅបណ្ដាញសង្គម…</div>
+                <div id="publisherResult" class="hidden rounded-lg border border-base-800 bg-base-850 p-3 text-[11px] text-base-300"></div>
+            </div>
+
+            <div class="mt-4 flex flex-wrap items-center justify-between gap-2 border-t border-base-800 pt-3">
+                <button id="btnClosePublisherFooter" type="button" class="rounded-lg border border-base-700 bg-base-850 px-3.5 py-1.5 text-xs text-base-300 hover:bg-base-800">បិទ</button>
+                <button id="btnSubmitPublisher" type="button" class="inline-flex items-center gap-1.5 rounded-lg bg-base-100 px-4 py-1.5 text-xs font-semibold text-base-950 hover:bg-base-200"><i data-lucide="send" class="h-3.5 w-3.5"></i><span>ផុសឥឡូវ</span></button>
+            </div>
+        </section>
+    </div>
+
+    <!-- URL Download Modal (yt-dlp) -->
+    <div id="urlDownloadModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-md bg-base-900 border border-base-750 rounded-xl p-5 shadow-xl relative">
+            <div class="flex items-center justify-between pb-3.5 border-b border-base-800">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="link" class="w-4 h-4 text-base-300"></i>
+                    <h3 class="text-sm font-semibold text-base-100">ទាញយកវីដេអូតាម Link (YouTube, TikTok, FB)</h3>
+                </div>
+                <button id="btnCloseUrlModal" class="p-1 rounded text-base-400 hover:text-white hover:bg-base-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="py-4 space-y-3.5 text-xs">
+                <div>
+                    <label class="block text-base-300 font-medium mb-1.5">
+                        តំណភ្ជាប់វីដេអូ (Video URL)
+                    </label>
+                    <input type="url" id="videoUrlInput" placeholder="https://www.youtube.com/watch?v=..." class="w-full px-3 py-2 rounded-lg bg-base-850 border border-base-750 text-white text-xs focus:outline-none focus:border-base-500 font-mono transition">
+                    <p class="text-base-400 text-[11px] mt-1.5 leading-relaxed">
+                        គាំទ្រ YouTube, TikTok, Facebook, Instagram, Twitter/X និងច្រើនទៀត។
+                    </p>
+                </div>
+
+                <div id="urlDownloadProgress" class="hidden">
+                    <div class="flex items-center justify-between gap-3 mb-1">
+                        <p class="text-base-300 text-[11px] font-medium" id="urlDownloadProgressText">Preparing video download…</p>
+                        <span id="urlDownloadPercent" class="text-base-100 text-[11px] font-semibold tabular-nums">0%</span>
+                    </div>
+                    <div id="urlDownloadProgressTrack" role="progressbar" aria-label="Video download progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" class="w-full bg-base-800 rounded-full h-1.5 overflow-hidden">
+                        <div id="urlDownloadProgressBar" class="bg-base-300 h-full w-0 transition-[width] duration-200"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3.5 border-t border-base-800">
+                <button id="btnCancelUrlDownload" class="px-3.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 text-base-300 font-medium text-xs transition border border-base-750">
+                    បោះបង់
+                </button>
+                <button id="btnConfirmDownloadUrl" class="px-4 py-1.5 rounded-lg bg-base-100 hover:bg-base-200 text-base-950 font-semibold text-xs transition flex items-center gap-1.5">
+                    <i data-lucide="download" class="w-3.5 h-3.5"></i>
+                    <span>ទាញយក</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hidden Audio Player for Segment Previews -->
+    <audio id="previewAudioElement" class="hidden"></audio>
+
+    <!-- Main JavaScript Logic -->
+    
+    
+    
+    <div id="toastRegion" aria-live="polite" aria-relevant="additions" class="fixed top-4 right-4 z-[90] flex max-h-[70vh] w-[min(92vw,28rem)] flex-col gap-2 overflow-hidden pointer-events-none"></div>
+
+    <div id="appDialog" class="fixed inset-0 z-[80] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-sm" role="presentation">
+        <section class="w-full max-w-md rounded-2xl border border-base-700 bg-base-900 p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="appDialogTitle">
+            <div class="mb-3 flex items-center gap-2">
+                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-base-800 text-base-300"><i data-lucide="message-square" class="h-4 w-4"></i></span>
+                <h2 id="appDialogTitle" class="text-sm font-semibold text-base-100">បញ្ជាក់សកម្មភាព</h2>
+            </div>
+            <p id="appDialogMessage" class="whitespace-pre-line text-xs leading-relaxed text-base-300"></p>
+            <input id="appDialogInput" type="text" class="mt-4 hidden w-full rounded-lg border border-base-700 bg-base-950 px-3 py-2 text-sm text-base-100 outline-none focus:border-base-400">
+            <div class="mt-5 flex justify-end gap-2">
+                <button id="appDialogCancel" type="button" class="rounded-lg border border-base-700 bg-base-850 px-4 py-2 text-xs text-base-300 transition hover:bg-base-800">បោះបង់</button>
+                <button id="appDialogConfirm" type="button" class="rounded-lg bg-base-100 px-4 py-2 text-xs font-semibold text-base-950 transition hover:bg-base-200">បន្ត</button>
+            </div>
+        </section>
+    </div>
+
+    <div id="speakerProfilesModal" class="fixed inset-0 z-[70] hidden items-center justify-center bg-black/65 p-4 backdrop-blur-sm" role="presentation">
+        <section class="w-full max-w-xl rounded-2xl border border-base-700 bg-base-900 p-5 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="speakerProfilesTitle">
+            <div class="mb-3 flex items-center justify-between border-b border-base-800 pb-3">
+                <div>
+                    <h2 id="speakerProfilesTitle" class="text-sm font-semibold text-base-100">តួអង្គ និងសំឡេង</h2>
+                    <p class="mt-1 text-[11px] text-base-400">ជ្រើសតួអង្គនៅលើ Segment ហើយសំឡេងរបស់តួអង្គនឹងមានភាពដូចគ្នា។</p>
+                </div>
+                <button id="btnCloseSpeakerProfiles" type="button" class="rounded p-1 text-base-400 hover:bg-base-800 hover:text-white" aria-label="បិទ">
+                    <i data-lucide="x" class="h-4 w-4"></i>
+                </button>
+            </div>
+            <div id="speakerProfilesList" class="max-h-[55vh] space-y-2 overflow-y-auto"></div>
+            <div class="mt-3 flex items-center justify-between border-t border-base-800 pt-3">
+                <button id="btnAddSpeaker" type="button" class="rounded-lg border border-base-700 bg-base-850 px-3 py-1.5 text-xs text-base-300 transition hover:bg-base-800">+ បន្ថែមតួអង្គ</button>
+                <div class="flex gap-2">
+                    <button id="btnCancelSpeakerProfiles" type="button" class="rounded-lg border border-base-700 bg-base-850 px-3 py-1.5 text-xs text-base-300 transition hover:bg-base-800">បោះបង់</button>
+                    <button id="btnSaveSpeakerProfiles" type="button" class="rounded-lg bg-base-100 px-4 py-1.5 text-xs font-semibold text-base-950 transition hover:bg-base-200">រក្សាទុក</button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Segment Quick Editor Modal (Edit segment from timeline or table) -->
+    <div id="segmentEditModal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="w-full max-w-lg bg-base-900 border border-base-750 rounded-xl p-5 shadow-2xl relative">
+            <div class="flex items-center justify-between pb-3.5 border-b border-base-800">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="edit-3" class="w-4 h-4 text-amber-400"></i>
+                    <h3 id="segmentModalTitle" class="text-sm font-semibold text-base-100">កែសម្រួលបន្ទាត់ Segment #1</h3>
+                </div>
+                <button id="btnCloseSegmentModal" class="p-1 rounded text-base-400 hover:text-white hover:bg-base-800">
+                    <i data-lucide="x" class="w-4 h-4"></i>
+                </button>
+            </div>
+
+            <div class="py-4 space-y-3.5 text-xs">
+                <!-- Time Range & Sync Controls -->
+                <div class="bg-base-850 p-3 rounded-lg border border-base-800 space-y-2">
+                    <label class="block text-base-300 font-medium text-[11px]">ពេលវេលាក្នុងវីដេអូ (Timing / Lip-sync)</label>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div>
+                            <span class="text-base-400 text-[11px] block mb-1">ម៉ោងចាប់ផ្តើម (Start - វិនាទី):</span>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" step="0.1" id="segModalStart" class="w-full px-2.5 py-1.5 rounded bg-base-900 border border-base-750 text-base-100 font-mono text-xs focus:outline-none focus:border-amber-400">
+                                <button id="btnModalSetStartToVideo" type="button" title="យកម៉ោងវីដេអូបច្ចុប្បន្នដាក់ជា Start" class="px-2 py-1.5 rounded bg-base-800 hover:bg-base-750 text-emerald-400 font-mono text-[11px] shrink-0 border border-base-700">
+                                    [ Video
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <span class="text-base-400 text-[11px] block mb-1">ម៉ោងបញ្ចប់ (End - វិនាទី):</span>
+                            <div class="flex items-center gap-1.5">
+                                <input type="number" step="0.1" id="segModalEnd" class="w-full px-2.5 py-1.5 rounded bg-base-900 border border-base-750 text-base-100 font-mono text-xs focus:outline-none focus:border-amber-400">
+                                <button id="btnModalSetEndToVideo" type="button" title="យកម៉ោងវីដេអូបច្ចុប្បន្នដាក់ជា End" class="px-2 py-1.5 rounded bg-base-800 hover:bg-base-750 text-emerald-400 font-mono text-[11px] shrink-0 border border-base-700">
+                                    Video ]
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between text-[11px] text-base-400 pt-1">
+                        <span id="segModalDuration" class="font-mono text-amber-300">រយៈពេល: 0.00s</span>
+                        <div class="flex items-center gap-1">
+                            <button id="btnModalPlaySegment" type="button" class="px-2.5 py-1 rounded bg-base-800 hover:bg-base-750 text-base-200 flex items-center gap-1 border border-base-700">
+                                <i data-lucide="play" class="w-3 h-3 text-emerald-400"></i>
+                                <span>ចាក់ឈុតនេះ</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Original Text -->
+                <div>
+                    <label class="block text-base-400 font-medium mb-1">អត្ថបទដើម (Original Text):</label>
+                    <textarea id="segModalOriginal" rows="2" class="w-full px-3 py-2 rounded-lg bg-base-850 border border-base-750 text-base-200 text-xs focus:outline-none focus:border-amber-400 resize-none font-sans"></textarea>
+                </div>
+
+                <!-- Translated Text -->
+                <div>
+                    <label class="block text-base-300 font-medium mb-1 flex items-center justify-between">
+                        <span>អត្ថបទបកប្រែជាភាសាខ្មែរ (Khmer Translated Text):</span>
+                        <span class="text-[10px] text-emerald-400 font-normal">សម្រាប់បញ្ចូលសំឡេង AI</span>
+                    </label>
+                    <textarea id="segModalTranslated" rows="3" placeholder="វាយអត្ថបទបកប្រែនៅទីនេះ..." class="w-full px-3 py-2 rounded-lg bg-base-900 border border-base-750 text-base-100 text-xs focus:outline-none focus:border-emerald-500 resize-none font-khmer leading-relaxed"></textarea>
+                </div>
+
+                <!-- Voice Selection & Actions -->
+                <div class="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                        <label class="block text-base-400 font-medium mb-1">តួអង្គ៖</label>
+                        <select id="segModalSpeaker" class="w-full px-2.5 py-1.5 rounded-lg bg-base-850 border border-base-750 text-xs text-base-200 focus:outline-none focus:border-amber-400">
+                            <option value="">មិនបានកំណត់</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-base-400 font-medium mb-1">សំឡេងនិយាយ:</label>
+                        <select id="segModalVoice" class="w-full px-2.5 py-1.5 rounded-lg bg-base-850 border border-base-750 text-xs text-base-200 focus:outline-none focus:border-amber-400">
+                            <option value="km-KH-PisethNeural">👨 Piseth (តួប្រុសទូទៅ)</option>
+                            <option value="km-KH-SreymomNeural">👩 Sreymom (តួស្រីទូទៅ)</option>
+                            <option value="km-character-old-man">👴 លោកតា (មនុស្សចាស់)</option>
+                            <option value="km-character-old-woman">👵 លោកយាយ (ស្រ្តីចំណាស់)</option>
+                            <option value="km-character-young-boy">👦 ក្មេងប្រុស (កុមារ)</option>
+                            <option value="km-character-young-girl">👧 ក្មេងស្រី (កុមារី)</option>
+                            <option value="km-character-villain">🧙‍♂️ តួអាក្រក់ (Villain)</option>
+                            <option value="km-character-narrator">📢 អ្នកអត្ថាធិប្បាយ (Narrator)</option>
+                        </select>
+                    </div>
+                    <div class="col-span-2 flex items-end gap-2">
+                        <button id="btnModalSplit" type="button" title="ពុះ Segment នេះជាពីរត្រង់ម៉ោងវីដេអូបច្ចុប្បន្ន" class="flex-1 px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 text-base-300 hover:text-white border border-base-750 transition flex items-center justify-center gap-1">
+                            <i data-lucide="scissors" class="w-3.5 h-3.5 text-amber-400"></i>
+                            <span>ពុះបន្ទាត់</span>
+                        </button>
+                        <button id="btnModalDelete" type="button" title="លុបបន្ទាត់ Segment នេះចោល" class="px-2.5 py-1.5 rounded-lg bg-base-850 hover:bg-red-950/60 text-red-400 border border-base-750 hover:border-red-800 transition flex items-center justify-center gap-1">
+                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            <span>លុប</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-2 pt-3 border-t border-base-800">
+                <button id="btnCancelSegmentModal" type="button" class="px-3.5 py-1.5 rounded-lg bg-base-850 hover:bg-base-800 text-base-300 font-medium text-xs transition border border-base-750">
+                    បោះបង់
+                </button>
+                <button id="btnSaveSegmentModal" type="button" class="px-4 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-base-950 font-semibold text-xs transition flex items-center gap-1.5 shadow-sm">
+                    <i data-lucide="check" class="w-3.5 h-3.5 text-base-950"></i>
+                    <span>យល់ព្រម រក្សាទុក</span>
+                </button>
+            </div>
+        </div>
+    </div>

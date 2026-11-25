@@ -1,0 +1,4 @@
+# Optional: adds Demucs and PyTorch for dialogue/accompaniment separation.
+# Install the PyTorch build appropriate for your CPU/CUDA setup if pip chooses
+# an unsuitable build: https://pytorch.org/get-started/locally/
+demucs>=4.0.1,<5

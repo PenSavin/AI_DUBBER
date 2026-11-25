@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="km" class="dark h-screen overflow-hidden">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI DUBBER - ប្រព័ន្ធបកប្រែ និងបញ្ចូលសំឡេងវីដេអូ AI</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for Khmer -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Kantumruy+Pro:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet">
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        base: {
+                            950: '#09090b',
+                            900: '#121215',
+                            850: '#18181b',
+                            800: '#202024',
+                            750: '#27272a',
+                            700: '#3f3f46',
+                            600: '#52525b',
+                            400: '#a1a1aa',
+                            300: '#d4d4d8',
+                            200: '#e4e4e7',
+                            100: '#f4f4f5',
+                        }
+                    },
+                    fontFamily: {
+                        khmer: ['"Kantumruy Pro"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        * {
+            font-family: 'Kantumruy Pro', sans-serif;
+        }
+        html, body {
+            height: 100vh;
+            max-height: 100vh;
+            overflow: hidden;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Consistent pointer feedback for interactive controls */
+        button:not(:disabled), a[href], select:not(:disabled), label[for] { cursor: pointer; }
+        button:disabled, select:disabled { cursor: not-allowed; }
+        button:focus-visible, a[href]:focus-visible, select:focus-visible, input:focus-visible, textarea:focus-visible {
+            outline: 2px solid #fbbf24;
+            outline-offset: 2px;
+        }
+        input[type="range"]:not(:disabled) { cursor: ew-resize; }
+        #timelineContainer { cursor: crosshair; }
+        #timelineContainer [data-seg-id] { cursor: grab; }
+        #timelineContainer [data-seg-id]:active { cursor: grabbing; }
+        #timelineContainer .resize-handle-left,
+        #timelineContainer .resize-handle-right { cursor: ew-resize !important; }
+        html.light { color-scheme: light; }
+        html.light body { background-color: #f3f4f6 !important; color: #374151 !important; }
+        html.light [class~="bg-base-950"] { background-color: #f3f4f6 !important; }
+        html.light [class~="bg-base-900"] { background-color: #ffffff !important; }
+        html.light [class~="bg-base-850"] { background-color: #f3f4f6 !important; }
+        html.light [class~="bg-base-850/95"] { background-color: rgba(243, 244, 246, .97) !important; }
+        html.light [class~="hover:bg-base-850/60"]:hover { background-color: rgba(229, 231, 235, .65) !important; }
+        html.light [class~="bg-base-800"] { background-color: #e5e7eb !important; }
+        html.light [class~="bg-base-750"] { background-color: #d1d5db !important; }
+        html.light [class~="bg-base-700"] { background-color: #cbd5e1 !important; }
+        html.light [class~="bg-base-300"] { background-color: #d1d5db !important; }
+        html.light [class~="bg-base-100"] { background-color: #111827 !important; }
+        html.light [class~="bg-base-800/80"] { background-color: rgba(229, 231, 235, .8) !important; }
+        html.light [class~="bg-base-900/60"] { background-color: rgba(255, 255, 255, .88) !important; }
+        html.light [class~="bg-base-900/80"] { background-color: rgba(255, 255, 255, .94) !important; }
+        html.light [class~="bg-base-700/50"] { background-color: rgba(203, 213, 225, .5) !important; }
+        html.light [class~="text-base-100"] { color: #111827 !important; }
+        html.light [class~="text-base-200"] { color: #1f2937 !important; }
+        html.light [class~="text-base-300"] { color: #374151 !important; }
+        html.light [class~="text-base-400"] { color: #6b7280 !important; }
+        html.light [class~="text-base-500"] { color: #6b7280 !important; }
+        html.light [class~="text-base-600"] { color: #9ca3af !important; }
+        html.light [class~="text-base-950"] { color: #f9fafb !important; }
+        html.light [class~="border-base-800"], html.light [class~="divide-base-800"] > :not([hidden]) ~ :not([hidden]) { border-color: #e5e7eb !important; }
+        html.light [class~="border-base-800/80"] { border-color: rgba(229, 231, 235, .8) !important; }
+        html.light [class~="border-base-750"] { border-color: #d1d5db !important; }
+        html.light [class~="border-base-700"] { border-color: #cbd5e1 !important; }
+        html.light [class~="ring-offset-base-950"] { --tw-ring-offset-color: #f3f4f6 !important; }
+        html.light [class~="hover:bg-base-800"]:hover { background-color: #e5e7eb !important; }
+        html.light [class~="hover:bg-base-850"]:hover { background-color: #f3f4f6 !important; }
+        html.light [class~="hover:bg-base-750"]:hover { background-color: #d1d5db !important; }
+        html.light [class~="hover:bg-base-700"]:hover { background-color: #cbd5e1 !important; }
+        html.light [class~="hover:bg-base-200"]:hover { background-color: #1f2937 !important; }
+        html.light [class~="hover:text-base-100"]:hover { color: #111827 !important; }
+        html.light [class~="hover:text-base-200"]:hover { color: #1f2937 !important; }
+        html.light [class~="hover:border-base-750"]:hover { border-color: #d1d5db !important; }
+        html.light [class~="focus:border-base-400"]:focus, html.light [class~="focus:border-base-500"]:focus { border-color: #6b7280 !important; }
+        html.light ::-webkit-scrollbar-track { background: #f3f4f6; }
+        html.light ::-webkit-scrollbar-thumb { background: #cbd5e1; border-color: #f3f4f6; }
+        html.light ::-webkit-scrollbar-thumb:hover { background: #9ca3af; }
+        html.light body::selection { background: #cbd5e1; color: #111827; }
+
+        /* Simple clean scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #121215;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #3f3f46;
+            border: 2px solid #121215;
+            border-radius: 6px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #71717a;
+        }
+    </style>
+    <script>
+        try {
+            if (localStorage.getItem("ai_dubber_theme") === "light") {
+                document.documentElement.classList.remove("dark");
+                document.documentElement.classList.add("light");
+            }
+        } catch (error) { /* Keep the default theme if browser storage is unavailable. */ }
+    </script>
+    <link rel="stylesheet" href="/static/css/workspace.css" data-beasties-skip>
+</head>
+<body class="bg-base-950 text-base-300 h-screen max-h-screen overflow-hidden flex flex-col font-khmer antialiased selection:bg-zinc-700 selection:text-white">
+  <app-root></app-root>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "/api": {
+    "target": "http://127.0.0.1:8000",
+    "secure": false
+  },
+  "/static": {
+    "target": "http://127.0.0.1:8000",
+    "secure": false
+  },
+  "/uploads": {
+    "target": "http://127.0.0.1:8000",
+    "secure": false
+  },
+  "/outputs": {
+    "target": "http://127.0.0.1:8000",
+    "secure": false
+  },
+  "/audio_segments": {
+    "target": "http://127.0.0.1:8000",
+    "secure": false
+  }
+}

@@ -1,0 +1,3036 @@
+/**
+ * AI Video Dubber & Translation - Frontend Controller
+ * Minimalist, Simple Neutral Theme (No colorful elements)
+ * All UI alerts and texts are in Khmer Language (ភាសាខ្មែរ)
+ */
+
+document.addEventListener("DOMContentLoaded", () => {
+    // --- Application State ---
+    
+    const CHARACTER_VOICE_ICONS = {
+        "km-KH-PisethNeural": "👨",
+        "km-KH-SreymomNeural": "👩",
+        "km-character-old-man": "👴",
+        "km-character-old-woman": "👵",
+        "km-character-young-boy": "👦",
+        "km-character-young-girl": "👧",
+        "km-character-villain": "🧙‍♂️",
+        "km-character-narrator": "📢"
+    };
+
+    const CHARACTER_VOICE_NAMES = {
+        "km-KH-PisethNeural": "Piseth (ប្រុស)",
+        "km-KH-SreymomNeural": "Sreymom (ស្រី)",
+        "km-character-old-man": "លោកតា (ចាស់)",
+        "km-character-old-woman": "លោកយាយ (ចាស់)",
+        "km-character-young-boy": "ក្មេងប្រុស",
+        "km-character-young-girl": "ក្មេងស្រី",
+        "km-character-villain": "តួអាក្រក់",
+        "km-character-narrator": "អ្នកនិទាន"
+    };
+
+    function getVoiceIcon(profile) {
+        return CHARACTER_VOICE_ICONS[profile] || "🎙️";
+    }
+
+    function getVoiceShortName(profile) {
+        return CHARACTER_VOICE_NAMES[profile] || "Piseth";
+    }
+
+    const defaultRightsReview = () => ({ footage: false, audio: false, third_party: false, license_terms: false, notes: "" });
+
+    const state = {
+        copyrightReview: defaultRightsReview(),
+        currentVideoFile: null,
+        currentVideoFilename: "",
+        currentVideoDuration: 0,
+        segments: [],
+        isPlaying: false,
+        activeSegmentId: null,
+        selectedSegmentId: null,
+        selectedSegmentIds: [],
+        showLiveSubtitles: true,
+        segmentTablePage: 0,
+        timelineZoom: 1,
+        timelineVerticalZoom: 1
+    };
+
+    let isRetryingFailedVoice = false;
+    let isCheckingAudioFit = false;
+    function failedVoiceSegments() {
+        return state.segments.filter(seg => String(seg.status || "").startsWith("បរាជ័យ:"));
+    }
+    function updateRetryFailedVoiceButton() {
+        if (!btnRetryFailedVoice) return;
+        const count = failedVoiceSegments().length;
+        btnRetryFailedVoice.disabled = isRetryingFailedVoice || count === 0;
+        const label = btnRetryFailedVoice.querySelector("span");
+        if (label) label.textContent = count ? `សាកម្ដងទៀត (${count})` : "សាកបង្កើតសំឡេងឡើងវិញ";
+    }
+    function updateAudioFitButton() {
+        if (btnCheckAudioFit) btnCheckAudioFit.disabled = isCheckingAudioFit || !state.segments.some(seg => Boolean(seg.audio_url));
+    }
+
+    // --- DOM Elements ---
+    const videoFileInput = document.getElementById("videoFileInput");
+    const projectFileInput = document.getElementById("projectFileInput");
+    const btnLoadVideo = document.getElementById("btnLoadVideo");
+    const btnOpenLinkModal = document.getElementById("btnOpenLinkModal");
+    const btnTranscribe = document.getElementById("btnTranscribe");
+    const btnTranslate = document.getElementById("btnTranslate");
+    const btnRemoveVoice = document.getElementById("btnRemoveVoice");
+    const btnOpenSettings = document.getElementById("btnOpenSettings");
+    const btnGenerateVoice = document.getElementById("btnGenerateVoice");
+    const btnRetryFailedVoice = document.getElementById("btnRetryFailedVoice");
+    const btnCheckAudioFit = document.getElementById("btnCheckAudioFit");
+    const audioFitStatus = document.getElementById("audioFitStatus");
+    const btnExportVideo = document.getElementById("btnExportVideo");
+    const btnExportSrt = document.getElementById("btnExportSrt");
+    const btnAddSegment = document.getElementById("btnAddSegment");
+    const btnUndo = document.getElementById("btnUndo");
+    const btnRedo = document.getElementById("btnRedo");
+    const btnThemeToggle = document.getElementById("btnThemeToggle");
+    const themeToggleIcon = document.getElementById("themeToggleIcon");
+
+    function applyTheme(theme) {
+        const isLight = theme === "light";
+        document.documentElement.classList.toggle("light", isLight);
+        document.documentElement.classList.toggle("dark", !isLight);
+        try { localStorage.setItem("ai_dubber_theme", isLight ? "light" : "dark"); } catch (error) { /* Theme still applies for this session. */ }
+        if (themeToggleIcon) themeToggleIcon.textContent = isLight ? "☾" : "☀";
+        if (btnThemeToggle) {
+            const nextTheme = isLight ? "Dark" : "Light";
+            btnThemeToggle.title = `ប្តូរទៅ ${nextTheme} mode`;
+            btnThemeToggle.setAttribute("aria-label", `ប្តូរទៅ ${nextTheme} mode`);
+            btnThemeToggle.setAttribute("aria-pressed", String(isLight));
+        }
+    }
+
+    applyTheme(document.documentElement.classList.contains("light") ? "light" : "dark");
+    if (btnThemeToggle) btnThemeToggle.addEventListener("click", () => {
+        applyTheme(document.documentElement.classList.contains("light") ? "dark" : "light");
+    });
+
+    const undoHistory = [];
+    const redoHistory = [];
+    const HISTORY_LIMIT = 50;
+    const SEGMENT_PAGE_SIZE = 100;
+    let savedProjectSnapshot = null;
+
+    function currentProjectSnapshot() {
+        return JSON.stringify({
+            video_filename: state.currentVideoFilename,
+            video_duration: state.currentVideoDuration,
+            copyright_review: state.copyrightReview,
+            segments: state.segments
+        });
+    }
+
+    function markProjectClean() {
+        savedProjectSnapshot = currentProjectSnapshot();
+        updateProjectDirtyStatus();
+    }
+
+    function updateProjectDirtyStatus() {
+        if (!projectDirtyStatus) return;
+        if (!state.currentVideoFilename && !state.segments.length) {
+            projectDirtyStatus.textContent = "គម្រោងថ្មី";
+            projectDirtyStatus.className = "max-w-36 truncate rounded-md bg-base-850 px-2 py-1 text-[10px] text-base-500";
+        } else if (savedProjectSnapshot === currentProjectSnapshot()) {
+            projectDirtyStatus.textContent = "បានរក្សាទុក";
+            projectDirtyStatus.className = "max-w-36 truncate rounded-md bg-emerald-950/60 px-2 py-1 text-[10px] text-emerald-300";
+        } else {
+            projectDirtyStatus.textContent = "មានការកែប្រែមិនទាន់រក្សាទុក";
+            projectDirtyStatus.className = "max-w-44 truncate rounded-md bg-amber-950/60 px-2 py-1 text-[10px] text-amber-300";
+        }
+    }
+
+    function updateHistoryButtons() {
+        if (btnUndo) btnUndo.disabled = undoHistory.length === 0;
+        if (btnRedo) btnRedo.disabled = redoHistory.length === 0;
+        [btnUndo, btnRedo].filter(Boolean).forEach(button => {
+            button.classList.toggle("opacity-40", button.disabled);
+            button.classList.toggle("cursor-not-allowed", button.disabled);
+        });
+    }
+
+    function recordUndo() {
+        undoHistory.push(JSON.stringify(state.segments));
+        if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
+        redoHistory.length = 0;
+        updateHistoryButtons();
+    }
+
+    function resetHistory() {
+        undoHistory.length = 0;
+        redoHistory.length = 0;
+        updateHistoryButtons();
+    }
+
+    function restoreHistorySnapshot(snapshot) {
+        state.segments = JSON.parse(snapshot);
+        state.selectedSegmentIds = (state.selectedSegmentIds || []).filter(id => state.segments.some(seg => seg.id === id));
+        if (state.selectedSegmentId && !state.segments.some(seg => seg.id === state.selectedSegmentId)) {
+            state.selectedSegmentId = null;
+        }
+        if (state.selectedSegmentId && !state.selectedSegmentIds.includes(state.selectedSegmentId)) {
+            state.selectedSegmentIds = [state.selectedSegmentId];
+        }
+        renderSegmentsTable();
+        renderTimelineTracks();
+        updateSubtitleOverlay();
+        if (state.selectedSegmentId) selectSegment(state.selectedSegmentId, false);
+        updateHistoryButtons();
+    }
+
+    function undo() {
+        if (!undoHistory.length) return;
+        redoHistory.push(JSON.stringify(state.segments));
+        restoreHistorySnapshot(undoHistory.pop());
+    }
+
+    function redo() {
+        if (!redoHistory.length) return;
+        undoHistory.push(JSON.stringify(state.segments));
+        restoreHistorySnapshot(redoHistory.pop());
+    }
+
+    if (btnUndo) btnUndo.addEventListener("click", undo);
+    if (btnRedo) btnRedo.addEventListener("click", redo);
+    updateHistoryButtons();
+
+    const btnOpenProject = document.getElementById("btnOpenProject");
+    const btnSaveProject = document.getElementById("btnSaveProject");
+    const projectDirtyStatus = document.getElementById("projectDirtyStatus");
+    const btnAutoDetectSpeakers = document.getElementById("btnAutoDetectSpeakers");
+    const btnAlternateVoices = document.getElementById("btnAlternateVoices");
+    const btnAllMale = document.getElementById("btnAllMale");
+    const btnAllFemale = document.getElementById("btnAllFemale");
+
+    const videoElement = document.getElementById("videoElement");
+    const videoEmptyPlaceholder = document.getElementById("videoEmptyPlaceholder");
+    const liveSubtitleOverlay = document.getElementById("liveSubtitleOverlay");
+    const btnToggleLiveSubtitles = document.getElementById("btnToggleLiveSubtitles");
+    const videoDurationBadge = document.getElementById("videoDurationBadge");
+    const lblCurrentFilename = document.getElementById("lblCurrentFilename");
+    const lblAudioStatus = document.getElementById("lblAudioStatus");
+    const previewAudioElement = document.getElementById("previewAudioElement");
+
+    const segmentsTableBody = document.getElementById("segmentsTableBody");
+    const tableEmptyRow = document.getElementById("tableEmptyRow");
+    const segmentsCountBadge = document.getElementById("segmentsCountBadge");
+    const segmentsPagination = document.getElementById("segmentsPagination");
+    const segmentsPageLabel = document.getElementById("segmentsPageLabel");
+    const btnSegmentsPrev = document.getElementById("btnSegmentsPrev");
+    const btnSegmentsNext = document.getElementById("btnSegmentsNext");
+    const findReplaceText = document.getElementById("findReplaceText");
+    const findReplaceWith = document.getElementById("findReplaceWith");
+    const findReplaceScope = document.getElementById("findReplaceScope");
+    const btnFindReplace = document.getElementById("btnFindReplace");
+    const findReplaceStatus = document.getElementById("findReplaceStatus");
+    const btnCheckTiming = document.getElementById("btnCheckTiming");
+    const timingIssueStatus = document.getElementById("timingIssueStatus");
+    const btnFixDuplicateSegments = document.getElementById("btnFixDuplicateSegments");
+    const duplicateSegmentStatus = document.getElementById("duplicateSegmentStatus");
+    const autosaveStatus = document.getElementById("autosaveStatus");
+    const AUTOSAVE_KEY = "ai_dubber_autosave_v1";
+    let autosaveTimer = null;
+    let timingIssueById = new Map();
+    let audioFitIssueById = new Map();
+
+    function saveAutosaveSnapshot() {
+        const snapshot = {
+            app: "AI_DUBBER",
+            version: 1,
+            saved_at: new Date().toISOString(),
+            video_filename: state.currentVideoFilename,
+            video_duration: state.currentVideoDuration,
+            copyright_review: state.copyrightReview,
+            segments: state.segments
+        };
+        try {
+            localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(snapshot));
+            if (autosaveStatus) autosaveStatus.textContent = "បានរក្សាទុកស្វ័យប្រវត្តិ";
+            return true;
+        } catch (error) {
+            console.warn("Autosave failed:", error);
+            if (autosaveStatus) autosaveStatus.textContent = "រក្សាទុកស្វ័យប្រវត្តិមិនបាន (Storage ពេញ)";
+            return false;
+        }
+    }
+
+    function scheduleAutosave() {
+        updateProjectDirtyStatus();
+        if (autosaveTimer) clearTimeout(autosaveTimer);
+        if (autosaveStatus) autosaveStatus.textContent = "កំពុងរក្សាទុក...";
+        autosaveTimer = setTimeout(saveAutosaveSnapshot, 700);
+    }
+
+    async function restoreAutosaveIfAvailable() {
+        try {
+            const raw = localStorage.getItem(AUTOSAVE_KEY);
+            if (!raw) return;
+            const saved = JSON.parse(raw);
+            if (!saved || !Array.isArray(saved.segments) || !saved.segments.length) return;
+            const savedAt = saved.saved_at ? new Date(saved.saved_at).toLocaleString() : "";
+            if (!(await showAppConfirm(`មានគម្រោងរក្សាទុកស្វ័យប្រវត្តិ${savedAt ? ` (${savedAt})` : ""} ដែលមាន ${saved.segments.length} segments។
+
+តើអ្នកចង់ស្តារវាវិញទេ?`, { title: "ស្តារគម្រោង", confirmText: "ស្តារគម្រោង" }))) return;
+            state.segments = saved.segments;
+            state.copyrightReview = { ...defaultRightsReview(), ...(saved.copyright_review || {}) };
+            state.currentVideoFilename = saved.video_filename || "";
+            state.currentVideoDuration = Number(saved.video_duration) || 0;
+            markProjectClean();
+            if (state.currentVideoFilename) lblCurrentFilename.textContent = state.currentVideoFilename;
+            if (state.currentVideoDuration) videoDurationBadge.textContent = `00:00 / ${formatTime(state.currentVideoDuration)}`;
+            renderSegmentsTable();
+            renderTimelineTracks();
+            syncRightsReviewControls();
+            enableButton(btnTranslate);
+            enableButton(btnGenerateVoice);
+            if (btnExportSrt) enableButton(btnExportSrt);
+            if (state.segments.some(seg => seg.audio_url)) enableButton(btnExportVideo);
+            if (autosaveStatus) autosaveStatus.textContent = "បានស្តារគម្រោងស្វ័យប្រវត្តិ";
+            setStatus("ស្តារគម្រោង", "បានស្តារគម្រោងពីការរក្សាទុកស្វ័យប្រវត្តិ។ សូមផ្ទុកវីដេអូឡើងវិញ ប្រសិនបើចង់មើល preview ឬនាំចេញវីដេអូ។");
+        } catch (error) {
+            console.warn("Could not restore autosave:", error);
+        }
+    }
+
+    function applyFindReplace() {
+        const search = findReplaceText?.value ?? "";
+        const replacement = findReplaceWith?.value ?? "";
+        if (!search) {
+            if (findReplaceStatus) findReplaceStatus.textContent = "បញ្ចូលពាក្យស្វែងរកជាមុនសិន។";
+            return;
+        }
+        const scope = findReplaceScope?.value || "translated_text";
+        const fields = scope === "both" ? ["original_text", "translated_text"] : [scope];
+        let replacementCount = 0;
+        const before = JSON.stringify(state.segments);
+        state.segments.forEach(seg => {
+            fields.forEach(field => {
+                const current = String(seg[field] || "");
+                const pieces = current.split(search);
+                const count = pieces.length - 1;
+                if (count) {
+                    seg[field] = pieces.join(replacement);
+                    if (field === "translated_text") {
+                        seg.audio_url = null;
+                        seg.status = "បានកែប្រែ - ត្រូវបង្កើតសំឡេងឡើងវិញ";
+                    }
+                    replacementCount += count;
+                }
+            });
+        });
+        if (replacementCount) {
+            undoHistory.push(before);
+            if (undoHistory.length > HISTORY_LIMIT) undoHistory.shift();
+            redoHistory.length = 0;
+            updateHistoryButtons();
+        }
+        if (findReplaceStatus) {
+            findReplaceStatus.textContent = replacementCount
+                ? `បានជំនួស ${replacementCount} កន្លែង។`
+                : "រកមិនឃើញពាក្យនេះទេ។";
+        }
+        if (replacementCount) {
+            // Rebuild controls from the updated segment data and persist the result.
+            renderSegmentsTable();
+            renderTimelineTracks();
+            updateSubtitleOverlay();
+        }
+    }
+
+    function computeTimingIssues() {
+        const issues = new Map();
+        const addIssue = (id, issue) => {
+            if (!issues.has(id)) issues.set(id, []);
+            issues.get(id).push(issue);
+        };
+        const ordered = [...state.segments].sort((a, b) => Number(a.start) - Number(b.start));
+        let previousWithLatestEnd = null;
+        ordered.forEach(seg => {
+            const start = Number(seg.start);
+            const end = Number(seg.end);
+            if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+                addIssue(seg.id, { type: "invalid", text: "ពេលបញ្ចប់ត្រូវតែធំជាងពេលចាប់ផ្តើម" });
+            }
+            if (previousWithLatestEnd) {
+                const previousEnd = Number(previousWithLatestEnd.end);
+                const gap = start - previousEnd;
+                if (gap < -0.02) {
+                    const seconds = Math.abs(gap).toFixed(2);
+                    addIssue(previousWithLatestEnd.id, { type: "overlap", text: `ត្រួតគ្នា ${seconds} វិនាទីជាមួយ Segment #${seg.id}` });
+                    addIssue(seg.id, { type: "overlap", text: `ត្រួតគ្នា ${seconds} វិនាទីជាមួយ Segment #${previousWithLatestEnd.id}` });
+                } else if (gap >= 5) {
+                    addIssue(seg.id, { type: "gap", text: `មានចន្លោះ ${gap.toFixed(1)} វិនាទីពី Segment #${previousWithLatestEnd.id}` });
+                }
+            }
+            if (!previousWithLatestEnd || end > Number(previousWithLatestEnd.end)) previousWithLatestEnd = seg;
+        });
+        return issues;
+    }
+
+    function buildExportPreflight() {
+        const issues = computeTimingIssues();
+        const allTimingIssues = [...issues.values()].flat();
+        const overlapPairs = allTimingIssues.filter(issue => issue.type === "overlap").length / 2;
+        const longGaps = allTimingIssues.filter(issue => issue.type === "gap").length;
+        const invalidTimes = allTimingIssues.filter(issue => issue.type === "invalid").length;
+        const missingTranslations = state.segments.filter(seg => !String(seg.translated_text || "").trim()).length;
+        const missingAudio = state.segments.filter(seg => String(seg.translated_text || "").trim() && !seg.audio_url).length;
+        const rows = [
+            { label: `មាន ${state.segments.length} segments`, ok: state.segments.length > 0 },
+            { label: state.currentVideoFilename ? `បានភ្ជាប់វីដេអូ: ${state.currentVideoFilename}` : "មិនទាន់មានវីដេអូដើម", ok: Boolean(state.currentVideoFilename) },
+            { label: missingTranslations ? `ខ្វះអត្ថបទបកប្រែ ${missingTranslations} segments` : "អត្ថបទបកប្រែគ្រប់ segments", ok: missingTranslations === 0 },
+            { label: missingAudio ? `ខ្វះសំឡេងបញ្ចូល ${missingAudio} segments` : "មានសំឡេងបញ្ចូលគ្រប់អត្ថបទបកប្រែ", ok: missingAudio === 0 },
+            { label: overlapPairs ? `មាន segment ត្រួតគ្នា ${overlapPairs} កន្លែង` : "មិនឃើញ segment ត្រួតគ្នា", ok: overlapPairs === 0 },
+            { label: invalidTimes ? `មានពេលវេលាមិនត្រឹមត្រូវ ${invalidTimes} segments` : "ពេលចាប់ផ្តើម/បញ្ចប់ត្រឹមត្រូវ", ok: invalidTimes === 0 },
+            { label: longGaps ? `មានចន្លោះលើស 5 វិនាទី ${longGaps} កន្លែង` : "មិនឃើញចន្លោះវែង", ok: longGaps === 0 }
+        ];
+        const warnings = rows.filter(row => !row.ok);
+        return { rows, warnings, blocking: !state.currentVideoFilename || !state.segments.length };
+    }
+
+    function syncRightsReviewControls() {
+        const review = state.copyrightReview || defaultRightsReview();
+        rightsReviewCheckboxes.forEach(input => {
+            input.checked = Boolean(review[input.dataset.rightsKey]);
+        });
+        if (rightsReviewNotes) rightsReviewNotes.value = review.notes || "";
+        updateRightsReviewProgress();
+    }
+
+    function updateRightsReviewProgress() {
+        const clearedCount = rightsReviewCheckboxes.filter(input => input.checked).length;
+        if (rightsReviewProgress) {
+            rightsReviewProgress.textContent = `${clearedCount} / ${rightsReviewCheckboxes.length} បានពិនិត្យ`;
+            rightsReviewProgress.className = `text-[10px] ${clearedCount === rightsReviewCheckboxes.length ? "text-emerald-300" : "text-amber-300"}`;
+        }
+    }
+
+    function renderExportPreflight() {
+        const report = buildExportPreflight();
+        if (exportPreflightList) {
+            exportPreflightList.replaceChildren();
+            report.rows.forEach(row => {
+                const item = document.createElement("li");
+                item.className = `flex items-start gap-2 ${row.ok ? "text-emerald-300" : "text-amber-300"}`;
+                const icon = document.createElement("span");
+                icon.textContent = row.ok ? "✓" : "⚠";
+                icon.className = "font-semibold";
+                const label = document.createElement("span");
+                label.textContent = row.label;
+                item.append(icon, label);
+                exportPreflightList.appendChild(item);
+            });
+        }
+        if (exportPreflightSummary) {
+            exportPreflightSummary.textContent = report.warnings.length
+                ? `រកឃើញចំណុចត្រូវពិនិត្យ ${report.warnings.length}`
+                : "ការត្រួតពិនិត្យរួចរាល់";
+            exportPreflightSummary.className = `text-[11px] font-medium ${report.warnings.length ? "text-amber-300" : "text-emerald-300"}`;
+        }
+        return report;
+    }
+
+    function updateTimingIssueSummary() {
+        if (!timingIssueStatus) return;
+        const issues = [...timingIssueById.values()].flat();
+        const overlapCount = issues.filter(issue => issue.type === "overlap").length / 2;
+        const gapCount = issues.filter(issue => issue.type === "gap").length;
+        const invalidCount = issues.filter(issue => issue.type === "invalid").length;
+        timingIssueStatus.textContent = issues.length
+            ? `បញ្ហា: ត្រួតគ្នា ${overlapCount}, ចន្លោះវែង ${gapCount}, ពេលមិនត្រឹមត្រូវ ${invalidCount}`
+            : (state.segments.length ? "ពេលវេលាមិនមានបញ្ហា" : "មិនទាន់មាន segments");
+        timingIssueStatus.className = issues.length ? "text-[10px] text-amber-300" : "text-[10px] text-emerald-400";
+    }
+
+    if (btnFindReplace) btnFindReplace.addEventListener("click", applyFindReplace);
+    [findReplaceText, findReplaceWith].filter(Boolean).forEach(input => input.addEventListener("keydown", e => {
+        if (e.key === "Enter") applyFindReplace();
+    }));
+    if (btnCheckTiming) btnCheckTiming.addEventListener("click", () => {
+        timingIssueById = computeTimingIssues();
+        updateTimingIssueSummary();
+        renderSegmentsTable();
+        const firstIssueId = timingIssueById.keys().next().value;
+        if (firstIssueId !== undefined) selectSegment(firstIssueId, true);
+        setStatus("ពិនិត្យពេលវេលា", timingIssueStatus?.textContent || "បានពិនិត្យរួចរាល់។");
+    });
+
+    function readAudioDuration(url) {
+        return new Promise(resolve => {
+            const audio = new Audio();
+            let finished = false;
+            const finish = duration => {
+                if (finished) return;
+                finished = true;
+                clearTimeout(timeout);
+                audio.removeAttribute("src");
+                audio.load();
+                resolve(Number.isFinite(duration) && duration > 0 ? duration : null);
+            };
+            const timeout = setTimeout(() => finish(null), 12000);
+            audio.preload = "metadata";
+            audio.addEventListener("loadedmetadata", () => finish(audio.duration), { once: true });
+            audio.addEventListener("error", () => finish(null), { once: true });
+            audio.src = url;
+            audio.load();
+        });
+    }
+
+    if (btnCheckAudioFit) btnCheckAudioFit.addEventListener("click", async () => {
+        const candidates = state.segments.filter(seg => seg.audio_url);
+        if (!candidates.length) return;
+        isCheckingAudioFit = true;
+        updateAudioFitButton();
+        audioFitIssueById = new Map();
+        if (audioFitStatus) audioFitStatus.textContent = `កំពុងពិនិត្យ ${candidates.length} segments...`;
+        try {
+            const results = await Promise.all(candidates.map(async seg => ({ seg, duration: await readAudioDuration(seg.audio_url) })));
+            let unreadable = 0;
+            results.forEach(({ seg, duration }) => {
+                if (duration === null) { unreadable += 1; return; }
+                const target = Math.max(0, Number(seg.end) - Number(seg.start));
+                const difference = duration - target;
+                const tolerance = Math.max(0.25, target * 0.08);
+                if (difference > tolerance || difference < -tolerance) {
+                    const text = difference > 0
+                        ? `សំឡេងវែងជាង Segment ${difference.toFixed(2)} វិនាទី`
+                        : `សំឡេងខ្លីជាង Segment ${Math.abs(difference).toFixed(2)} វិនាទី`;
+                    audioFitIssueById.set(seg.id, [{ type: "audio-fit", text }]);
+                }
+            });
+            const issueCount = audioFitIssueById.size;
+            if (audioFitStatus) {
+                audioFitStatus.textContent = issueCount ? `ត្រូវពិនិត្យ ${issueCount} segments${unreadable ? ` · មិនអាចអាន ${unreadable}` : ""}` : `ប្រវែងសំឡេងស៊ីគ្នា${unreadable ? ` · មិនអាចអាន ${unreadable}` : ""}`;
+                audioFitStatus.className = `text-[10px] ${issueCount || unreadable ? "text-amber-300" : "text-emerald-400"}`;
+            }
+            renderSegmentsTable();
+            setStatus("ពិនិត្យប្រវែងសំឡេង", issueCount ? `រកឃើញ ${issueCount} segments ដែលប្រវែងសំឡេងខុសពី timeline។` : "បានពិនិត្យប្រវែងសំឡេង AI រួចរាល់។");
+        } catch (error) {
+            console.error(error);
+            if (audioFitStatus) audioFitStatus.textContent = "ពិនិត្យប្រវែងសំឡេងមិនបាន";
+            showToast(`កំហុសក្នុងការពិនិត្យសំឡេង: ${error.message}`);
+        } finally {
+            isCheckingAudioFit = false;
+            updateAudioFitButton();
+        }
+    });
+
+    const timelinePanel = document.getElementById("timelinePanel");
+    const timelineResizeHandle = document.getElementById("timelineResizeHandle");
+    const timelineBody = document.getElementById("timelineBody");
+    const timelineTrackLabels = document.getElementById("timelineTrackLabels");
+    const timelineContainer = document.getElementById("timelineContainer");
+    const timelineContentWrapper = document.getElementById("timelineContentWrapper");
+    const timelineTimeRuler = document.getElementById("timelineTimeRuler");
+    const timelinePlayhead = document.getElementById("timelinePlayhead");
+    const timelineCurrentTime = document.getElementById("timelineCurrentTime");
+    const trackText = document.getElementById("trackText");
+    const trackVoice = document.getElementById("trackVoice");
+    const btnZoomIn = document.getElementById("btnZoomIn");
+    const btnZoomOut = document.getElementById("btnZoomOut");
+    const btnZoomFit = document.getElementById("btnZoomFit");
+    const lblZoomLevel = document.getElementById("lblZoomLevel");
+    const btnTimelineVerticalZoomOut = document.getElementById("btnTimelineVerticalZoomOut");
+    const btnTimelineVerticalZoomIn = document.getElementById("btnTimelineVerticalZoomIn");
+    const btnTimelineVerticalZoomFit = document.getElementById("btnTimelineVerticalZoomFit");
+    const lblTimelineVerticalZoom = document.getElementById("lblTimelineVerticalZoom");
+    const trackBg = document.getElementById("trackBg");
+
+    const TIMELINE_HEIGHT_KEY = "ai_dubber_timeline_panel_height";
+    const getTimelineHeightLimits = () => ({ min: 130, max: Math.max(130, Math.floor(window.innerHeight * 0.7)) });
+    const setTimelinePanelHeight = (height, persist = false) => {
+        if (!timelinePanel || !timelineResizeHandle) return;
+        const limits = getTimelineHeightLimits();
+        const clampedHeight = Math.max(limits.min, Math.min(limits.max, Math.round(height)));
+        timelinePanel.style.height = `${clampedHeight}px`;
+        timelineResizeHandle.setAttribute("aria-valuemin", String(limits.min));
+        timelineResizeHandle.setAttribute("aria-valuemax", String(limits.max));
+        timelineResizeHandle.setAttribute("aria-valuenow", String(clampedHeight));
+        if (persist) {
+            try { localStorage.setItem(TIMELINE_HEIGHT_KEY, String(clampedHeight)); } catch (error) { /* Height still applies for this session. */ }
+        }
+    };
+    if (timelinePanel && timelineResizeHandle) {
+        try {
+            const savedHeight = Number(localStorage.getItem(TIMELINE_HEIGHT_KEY));
+            if (Number.isFinite(savedHeight) && savedHeight > 0) setTimelinePanelHeight(savedHeight);
+            else setTimelinePanelHeight(timelinePanel.getBoundingClientRect().height);
+        } catch (error) {
+            setTimelinePanelHeight(timelinePanel.getBoundingClientRect().height);
+        }
+
+        timelineResizeHandle.addEventListener("pointerdown", event => {
+            if (event.button !== 0) return;
+            event.preventDefault();
+            const startY = event.clientY;
+            const startHeight = timelinePanel.getBoundingClientRect().height;
+            timelineResizeHandle.setPointerCapture(event.pointerId);
+            document.body.style.cursor = "row-resize";
+            const onMove = moveEvent => setTimelinePanelHeight(startHeight + startY - moveEvent.clientY);
+            const onEnd = endEvent => {
+                timelineResizeHandle.removeEventListener("pointermove", onMove);
+                timelineResizeHandle.removeEventListener("pointerup", onEnd);
+                timelineResizeHandle.removeEventListener("pointercancel", onEnd);
+                document.body.style.cursor = "";
+                setTimelinePanelHeight(timelinePanel.getBoundingClientRect().height, true);
+                if (timelineResizeHandle.hasPointerCapture(endEvent.pointerId)) timelineResizeHandle.releasePointerCapture(endEvent.pointerId);
+            };
+            timelineResizeHandle.addEventListener("pointermove", onMove);
+            timelineResizeHandle.addEventListener("pointerup", onEnd);
+            timelineResizeHandle.addEventListener("pointercancel", onEnd);
+        });
+        timelineResizeHandle.addEventListener("keydown", event => {
+            const limits = getTimelineHeightLimits();
+            const currentHeight = timelinePanel.getBoundingClientRect().height;
+            if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                setTimelinePanelHeight(currentHeight + (event.key === "ArrowUp" ? 16 : -16), true);
+            } else if (event.key === "Home") {
+                event.preventDefault();
+                setTimelinePanelHeight(limits.min, true);
+            } else if (event.key === "End") {
+                event.preventDefault();
+                setTimelinePanelHeight(limits.max, true);
+            }
+        });
+        window.addEventListener("resize", () => setTimelinePanelHeight(timelinePanel.getBoundingClientRect().height));
+    }
+    const lblSelectedSegment = document.getElementById("lblSelectedSegment");
+    const btnSetStartToCurrent = document.getElementById("btnSetStartToCurrent");
+    const btnSetEndToCurrent = document.getElementById("btnSetEndToCurrent");
+    const btnNudgeLeft = document.getElementById("btnNudgeLeft");
+    const btnNudgeRight = document.getElementById("btnNudgeRight");
+    const btnShiftAll = document.getElementById("btnShiftAll");
+    const btnEditSelected = document.getElementById("btnEditSelected");
+    const btnSplitAtPlayhead = document.getElementById("btnSplitAtPlayhead");
+    const btnDeleteSelected = document.getElementById("btnDeleteSelected");
+
+    // Segment Quick Editor Modal DOM Elements
+    const segmentEditModal = document.getElementById("segmentEditModal");
+    const btnCloseSegmentModal = document.getElementById("btnCloseSegmentModal");
+    const btnCancelSegmentModal = document.getElementById("btnCancelSegmentModal");
+    const btnSaveSegmentModal = document.getElementById("btnSaveSegmentModal");
+    const segmentModalTitle = document.getElementById("segmentModalTitle");
+    const segModalStart = document.getElementById("segModalStart");
+    const segModalEnd = document.getElementById("segModalEnd");
+    const segModalDuration = document.getElementById("segModalDuration");
+    const btnModalSetStartToVideo = document.getElementById("btnModalSetStartToVideo");
+    const btnModalSetEndToVideo = document.getElementById("btnModalSetEndToVideo");
+    const btnModalPlaySegment = document.getElementById("btnModalPlaySegment");
+    const segModalOriginal = document.getElementById("segModalOriginal");
+    const segModalTranslated = document.getElementById("segModalTranslated");
+    const segModalVoice = document.getElementById("segModalVoice");
+    const btnModalSplit = document.getElementById("btnModalSplit");
+    const btnModalDelete = document.getElementById("btnModalDelete");
+
+    const settingsModal = document.getElementById("settingsModal");
+    const btnCloseSettingsModal = document.getElementById("btnCloseSettingsModal");
+    const btnCancelSettings = document.getElementById("btnCancelSettings");
+    const btnSaveKey = document.getElementById("btnSaveKey");
+    const btnTestKey = document.getElementById("btnTestKey");
+    const testKeyStatus = document.getElementById("testKeyStatus");
+    const geminiApiKeyInput = document.getElementById("geminiApiKeyInput");
+    const geminiModelSelect = document.getElementById("geminiModelSelect");
+    const translationToneSelect = document.getElementById("translationToneSelect");
+    const customGlossaryInput = document.getElementById("customGlossaryInput");
+    const maleRateInput = document.getElementById("maleRateInput");
+    const malePitchInput = document.getElementById("malePitchInput");
+    const femaleRateInput = document.getElementById("femaleRateInput");
+    const femalePitchInput = document.getElementById("femalePitchInput");
+
+    const exportModal = document.getElementById("exportModal");
+    const btnCloseExportModal = document.getElementById("btnCloseExportModal");
+    const btnCancelExport = document.getElementById("btnCancelExport");
+    const btnConfirmExport = document.getElementById("btnConfirmExport");
+    const chkBurnSubtitles = document.getElementById("chkBurnSubtitles");
+    const exportSubFontSize = document.getElementById("exportSubFontSize");
+    const exportSubColor = document.getElementById("exportSubColor");
+    const exportSubStyle = document.getElementById("exportSubStyle");
+    const exportSubPosition = document.getElementById("exportSubPosition");
+    const exportPreflightSummary = document.getElementById("exportPreflightSummary");
+    const exportPreflightList = document.getElementById("exportPreflightList");
+    const rightsReviewProgress = document.getElementById("rightsReviewProgress");
+    const rightsReviewNotes = document.getElementById("rightsReviewNotes");
+    const rightsReviewCheckboxes = [...document.querySelectorAll("[data-rights-key]")];
+    const btnRefreshExportCheck = document.getElementById("btnRefreshExportCheck");
+    const exportProgressContainer = document.getElementById("exportProgressContainer");
+    const exportProgressText = document.getElementById("exportProgressText");
+    const exportSuccessContainer = document.getElementById("exportSuccessContainer");
+    const exportDownloadLink = document.getElementById("exportDownloadLink");
+
+    const urlDownloadModal = document.getElementById("urlDownloadModal");
+    const btnCloseUrlModal = document.getElementById("btnCloseUrlModal");
+    const btnCancelUrlDownload = document.getElementById("btnCancelUrlDownload");
+    const btnConfirmDownloadUrl = document.getElementById("btnConfirmDownloadUrl");
+    const videoUrlInput = document.getElementById("videoUrlInput");
+    const urlDownloadProgress = document.getElementById("urlDownloadProgress");
+
+    const statusNotificationBox = document.getElementById("statusNotificationBox");
+    const statusNotificationTitle = document.getElementById("statusNotificationTitle");
+    const statusNotificationText = document.getElementById("statusNotificationText");
+
+    const toastRegion = document.getElementById("toastRegion");
+    const appDialog = document.getElementById("appDialog");
+    const appDialogTitle = document.getElementById("appDialogTitle");
+    const appDialogMessage = document.getElementById("appDialogMessage");
+    const appDialogInput = document.getElementById("appDialogInput");
+    const appDialogConfirm = document.getElementById("appDialogConfirm");
+    const appDialogCancel = document.getElementById("appDialogCancel");
+    let appDialogResolver = null;
+    let appDialogMode = "confirm";
+
+    function showToast(message, type) {
+        if (!toastRegion) return;
+        const text = String(message ?? "");
+        const inferredType = type || (/កំហុស|បរាជ័យ|មិនត្រឹមត្រូវ|មិនអាច|failed|error/i.test(text) ? "error" : (/ជោគជ័យ|សម្រេច|រួចរាល់/i.test(text) ? "success" : "info"));
+        const toast = document.createElement("div");
+        const palette = inferredType === "error"
+            ? "border-red-800 bg-red-950/95 text-red-100"
+            : (inferredType === "success" ? "border-emerald-800 bg-emerald-950/95 text-emerald-100" : "border-base-700 bg-base-850/95 text-base-100");
+        toast.className = `pointer-events-auto flex max-w-md items-start gap-3 rounded-xl border px-4 py-3 text-xs shadow-2xl backdrop-blur transition-all ${palette}`;
+        toast.setAttribute("role", inferredType === "error" ? "alert" : "status");
+        const messageNode = document.createElement("p");
+        messageNode.className = "flex-1 whitespace-pre-line leading-relaxed";
+        messageNode.textContent = text;
+        const close = document.createElement("button");
+        close.type = "button";
+        close.className = "shrink-0 text-current opacity-60 hover:opacity-100";
+        close.setAttribute("aria-label", "បិទសារ");
+        close.textContent = "×";
+        close.addEventListener("click", () => toast.remove());
+        toast.append(messageNode, close);
+        toastRegion.appendChild(toast);
+        setTimeout(() => toast.remove(), inferredType === "error" ? 8000 : 4500);
+    }
+
+    function showAppDialog(message, options = {}) {
+        if (!appDialog) return Promise.resolve(options.mode === "prompt" ? null : false);
+        if (appDialogResolver) appDialogResolver(options.mode === "prompt" ? null : false);
+        appDialogMode = options.mode || "confirm";
+        appDialogTitle.textContent = options.title || (appDialogMode === "prompt" ? "បញ្ចូលតម្លៃ" : "បញ្ជាក់សកម្មភាព");
+        appDialogMessage.textContent = String(message ?? "");
+        appDialogInput.classList.toggle("hidden", appDialogMode !== "prompt");
+        appDialogInput.value = options.defaultValue ?? "";
+        appDialogConfirm.textContent = options.confirmText || (appDialogMode === "prompt" ? "យល់ព្រម" : "បន្ត");
+        appDialogCancel.textContent = options.cancelText || "បោះបង់";
+        appDialogConfirm.className = `px-4 py-2 rounded-lg text-xs font-semibold transition ${options.danger ? "bg-red-500 hover:bg-red-400 text-white" : "bg-base-100 hover:bg-base-200 text-base-950"}`;
+        appDialog.classList.remove("hidden");
+        appDialog.classList.add("flex");
+        if (appDialogMode === "prompt") appDialogInput.focus(); else appDialogConfirm.focus();
+        return new Promise(resolve => { appDialogResolver = resolve; });
+    }
+
+    function finishAppDialog(confirmed) {
+        if (!appDialogResolver) return;
+        const resolve = appDialogResolver;
+        appDialogResolver = null;
+        appDialog.classList.add("hidden");
+        appDialog.classList.remove("flex");
+        resolve(confirmed ? (appDialogMode === "prompt" ? appDialogInput.value : true) : (appDialogMode === "prompt" ? null : false));
+    }
+
+    function showAppConfirm(message, options = {}) {
+        return showAppDialog(message, { ...options, mode: "confirm" });
+    }
+
+    function showAppPrompt(message, defaultValue = "", options = {}) {
+        return showAppDialog(message, { ...options, mode: "prompt", defaultValue });
+    }
+
+    appDialogConfirm?.addEventListener("click", () => finishAppDialog(true));
+    appDialogCancel?.addEventListener("click", () => finishAppDialog(false));
+    appDialog?.addEventListener("click", event => {
+        if (event.target === appDialog) finishAppDialog(false);
+    });
+    appDialogInput?.addEventListener("keydown", event => {
+        if (event.key === "Enter") finishAppDialog(true);
+    });
+    window.addEventListener("keydown", event => {
+        if (event.key === "Escape" && appDialog && !appDialog.classList.contains("hidden")) finishAppDialog(false);
+    });
+
+    const liveProgressContainer = document.getElementById("liveProgressContainer");
+    const liveProgressTitle = document.getElementById("liveProgressTitle");
+    const liveProgressPercent = document.getElementById("liveProgressPercent");
+    const liveProgressBar = document.getElementById("liveProgressBar");
+    const liveProgressLatestText = document.getElementById("liveProgressLatestText");
+    const liveProgressTime = document.getElementById("liveProgressTime");
+
+    // --- Utility Functions ---
+
+    function setStatus(title, message, isError = false) {
+        statusNotificationTitle.textContent = title;
+        statusNotificationText.textContent = message;
+        if (isError) {
+            statusNotificationBox.className = "rounded-lg p-3 bg-base-850 border border-zinc-700 text-xs flex items-start gap-2.5 transition text-zinc-300";
+        } else {
+            statusNotificationBox.className = "rounded-lg p-3 bg-base-850 border border-base-800 text-xs flex items-start gap-2.5 transition";
+        }
+    }
+
+    function formatTime(seconds) {
+        if (isNaN(seconds) || seconds < 0) return "00:00";
+        const totalSecs = Math.floor(seconds);
+        const hrs = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        if (hrs > 0) {
+            return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+        }
+        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    }
+
+    function formatTimeDetailed(seconds) {
+        if (isNaN(seconds) || seconds < 0) return "00:00.00";
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        const ms = Math.floor((seconds % 1) * 100);
+        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${ms.toString().padStart(2, "0")}`;
+    }
+
+    // Table timestamps are displayed and edited as minutes:seconds, while the
+    // application continues to store and process time in seconds internally.
+    function formatSegmentTime(seconds) {
+        if (!Number.isFinite(Number(seconds)) || Number(seconds) < 0) return "00:00.00";
+        const totalCentiseconds = Math.round(Number(seconds) * 100);
+        const mins = Math.floor(totalCentiseconds / 6000);
+        const secs = Math.floor((totalCentiseconds % 6000) / 100);
+        const centiseconds = totalCentiseconds % 100;
+        return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${centiseconds.toString().padStart(2, "0")}`;
+    }
+
+    function parseSegmentTime(value) {
+        const input = String(value).trim();
+        if (input.includes(":")) {
+            const parts = input.split(":").map(Number);
+            if (parts.length === 2 && parts.every(Number.isFinite)) {
+                return Math.max(0, parts[0] * 60 + parts[1]);
+            }
+            if (parts.length === 3 && parts.every(Number.isFinite)) {
+                return Math.max(0, parts[0] * 3600 + parts[1] * 60 + parts[2]);
+            }
+            return NaN;
+        }
+        // A plain number is interpreted as decimal minutes for convenient entry.
+        const minutes = Number(input);
+        return Number.isFinite(minutes) ? Math.max(0, minutes * 60) : NaN;
+    }
+
+    function enableButton(button) {
+        button.disabled = false;
+        button.classList.remove("opacity-50", "cursor-not-allowed");
+    }
+
+    function disableButton(button) {
+        button.disabled = true;
+        button.classList.add("opacity-50", "cursor-not-allowed");
+    }
+
+    // --- Settings & LocalStorage Management ---
+
+    function loadSavedSettings() {
+        const savedKey = localStorage.getItem("gemini_api_key");
+        if (savedKey) {
+            geminiApiKeyInput.value = savedKey;
+        }
+        const supportedGeminiModels = [
+            "gemini-3.8-flash",
+            "gemini-3.5-flash",
+            "gemini-3.5-flash-lite",
+            "gemini-3.1-flash-lite"
+        ];
+        let savedModel = localStorage.getItem("gemini_model");
+        if (!supportedGeminiModels.includes(savedModel)) {
+            savedModel = "gemini-3.8-flash";
+            localStorage.setItem("gemini_model", savedModel);
+        }
+        if (geminiModelSelect) {
+            geminiModelSelect.value = savedModel;
+        }
+        if (testKeyStatus) {
+            testKeyStatus.classList.add("hidden");
+            testKeyStatus.textContent = "";
+        }
+        const savedTone = localStorage.getItem("translation_tone") || "conversational";
+        if (translationToneSelect) {
+            translationToneSelect.value = savedTone;
+        }
+        const savedGlossary = localStorage.getItem("custom_glossary") || "";
+        if (customGlossaryInput) {
+            customGlossaryInput.value = savedGlossary;
+        }
+        if (maleRateInput) maleRateInput.value = localStorage.getItem("male_rate") || 0;
+        if (malePitchInput) malePitchInput.value = localStorage.getItem("male_pitch") || 0;
+        if (femaleRateInput) femaleRateInput.value = localStorage.getItem("female_rate") || 0;
+        if (femalePitchInput) femalePitchInput.value = localStorage.getItem("female_pitch") || 0;
+    }
+
+    btnOpenSettings.addEventListener("click", () => {
+        loadSavedSettings();
+        settingsModal.classList.remove("hidden");
+    });
+
+    btnCloseSettingsModal.addEventListener("click", () => {
+        settingsModal.classList.add("hidden");
+    });
+
+    btnCancelSettings.addEventListener("click", () => {
+        settingsModal.classList.add("hidden");
+    });
+
+    if (btnTestKey) {
+        btnTestKey.addEventListener("click", async () => {
+            const key = geminiApiKeyInput.value.trim();
+            if (!key) {
+                showToast("សូមបញ្ចូល Gemini API Key នៅក្នុងប្រអប់ជាមុនសិន!");
+                geminiApiKeyInput.focus();
+                return;
+            }
+
+            disableButton(btnTestKey);
+            testKeyStatus.className = "text-[11px] mt-1.5 text-amber-300 block";
+            testKeyStatus.textContent = "⏳ កំពុងតេស្តសោ API Key ជាមួយ Google Gemini...";
+
+            try {
+                const response = await fetch("/api/test-key", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        api_key: key,
+                        model: geminiModelSelect ? geminiModelSelect.value : "gemini-3.8-flash"
+                    })
+                });
+
+                const data = await response.json();
+                if (!response.ok) {
+                    throw new Error(data.detail || "សោ API Key មិនដំណើរការ");
+                }
+
+                testKeyStatus.className = "text-[11px] mt-1.5 text-emerald-400 block font-medium";
+                testKeyStatus.textContent = `✅ ${data.message}`;
+            } catch (err) {
+                testKeyStatus.className = "text-[11px] mt-1.5 text-red-400 block";
+                testKeyStatus.textContent = `❌ ${err.message}`;
+            } finally {
+                enableButton(btnTestKey);
+            }
+        });
+    }
+
+    btnSaveKey.addEventListener("click", () => {
+        const key = geminiApiKeyInput.value.trim();
+        if (!key) {
+            showToast("សូមបញ្ចូល Gemini API Key ត្រឹមត្រូវមួយ!");
+            return;
+        }
+        localStorage.setItem("gemini_api_key", key);
+        if (geminiModelSelect) {
+            localStorage.setItem("gemini_model", geminiModelSelect.value);
+        }
+        if (translationToneSelect) {
+            localStorage.setItem("translation_tone", translationToneSelect.value);
+        }
+        if (customGlossaryInput) {
+            localStorage.setItem("custom_glossary", customGlossaryInput.value.trim());
+        }
+        if (maleRateInput) localStorage.setItem("male_rate", maleRateInput.value);
+        if (malePitchInput) localStorage.setItem("male_pitch", malePitchInput.value);
+        if (femaleRateInput) localStorage.setItem("female_rate", femaleRateInput.value);
+        if (femalePitchInput) localStorage.setItem("female_pitch", femalePitchInput.value);
+
+        showToast("បានរក្សាទុកការកំណត់ និងសោ API Key ដោយជោគជ័យ!");
+        settingsModal.classList.add("hidden");
+        const modelName = geminiModelSelect ? geminiModelSelect.value : "gemini-3.8-flash";
+        setStatus("ការកំណត់", `សោ API Key, ម៉ូដែល (${modelName}), និងការកំណត់សំឡេងត្រូវបានរក្សាទុក។`);
+    });
+
+    // --- Video Upload Handling ---
+
+    btnLoadVideo.addEventListener("click", () => {
+        videoFileInput.click();
+    });
+
+    videoFileInput.addEventListener("change", async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        state.currentVideoFile = file;
+        lblCurrentFilename.textContent = file.name;
+        setStatus("កំពុងផ្ទុកវីដេអូ", "សូមរង់ចាំបន្តិច កំពុងបញ្ជូនឯកសារទៅម៉ាស៊ីនបម្រើ...");
+
+        const formData = new FormData();
+        formData.append("file", file);
+
+        try {
+            const response = await fetch("/api/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "ការផ្ទុកវីដេអូបរាជ័យ");
+            }
+
+            const data = await response.json();
+            if (state.currentVideoFilename !== data.filename) state.copyrightReview = defaultRightsReview();
+            state.currentVideoFilename = data.filename;
+            state.currentVideoDuration = data.duration || 0;
+            if (lblAudioStatus) lblAudioStatus.textContent = "សំឡេងដើម";
+            const removeVoiceLabel = btnRemoveVoice.querySelector("span");
+            if (removeVoiceLabel) removeVoiceLabel.textContent = "លុបសំឡេងដើម";
+            syncRightsReviewControls();
+            updateProjectDirtyStatus();
+            scheduleAutosave();
+
+            // Update Video Player
+            videoElement.src = data.video_url;
+            videoElement.controls = true;
+            videoEmptyPlaceholder.classList.add("hidden");
+            videoDurationBadge.textContent = `00:00 / ${formatTime(data.duration)}`;
+            videoElement.onloadedmetadata = () => {
+                if (videoElement.duration && videoElement.duration > 0) {
+                    state.currentVideoDuration = videoElement.duration;
+                    videoDurationBadge.textContent = `00:00 / ${formatTime(videoElement.duration)}`;
+                    updateProjectDirtyStatus();
+                    scheduleAutosave();
+                }
+            };
+
+            // Enable next action buttons
+            enableButton(btnTranscribe);
+            enableButton(btnRemoveVoice);
+            setStatus("ជោគជ័យ", "បានផ្ទុកវីដេអូរួចរាល់! លោកអ្នកអាចចុច 'បម្លែងអត្ថបទ' ដើម្បីចាប់ផ្តើម។");
+        } catch (error) {
+            console.error(error);
+            showToast(`កំហុសក្នុងការផ្ទុកវីដេអូ: ${error.message}`);
+            setStatus("បរាជ័យ", error.message, true);
+        }
+    });
+
+    const chkLiveVoiceSync = document.getElementById("chkLiveVoiceSync");
+    const chkOriginalSound = document.getElementById("chkOriginalSound");
+    const originalSoundToggleStatus = document.getElementById("originalSoundToggleStatus");
+    try {
+        if (chkOriginalSound) chkOriginalSound.checked = localStorage.getItem("ai_dubber_original_sound") !== "off";
+    } catch (error) { /* Keep the default on if local storage is unavailable. */ }
+    let currentPlayingAudioSegId = null;
+
+    function updateOriginalSoundPlayback() {
+        if (!videoElement || !chkOriginalSound) return;
+        const enabled = chkOriginalSound.checked;
+        const duckingForDub = enabled && chkLiveVoiceSync?.checked && !videoElement.paused && currentPlayingAudioSegId !== null;
+        videoElement.muted = !enabled;
+        videoElement.volume = duckingForDub ? 0.15 : 1.0;
+        if (originalSoundToggleStatus) originalSoundToggleStatus.textContent = enabled ? "បើក" : "បិទ";
+    }
+
+    if (chkOriginalSound) chkOriginalSound.addEventListener("change", () => {
+        try { localStorage.setItem("ai_dubber_original_sound", chkOriginalSound.checked ? "on" : "off"); } catch (error) { /* Toggle still works for this session. */ }
+        updateOriginalSoundPlayback();
+    });
+
+    if (chkLiveVoiceSync) chkLiveVoiceSync.addEventListener("change", () => {
+        if (!chkLiveVoiceSync.checked) {
+            currentPlayingAudioSegId = null;
+            previewAudioElement.pause();
+        }
+        updateOriginalSoundPlayback();
+    });
+
+    function updateSubtitleOverlay() {
+        if (!liveSubtitleOverlay || !videoElement) return;
+        const current = videoElement.currentTime || 0;
+        const activeSeg = state.segments.find(seg => current >= Number(seg.start) && current <= Number(seg.end));
+        const subtitleText = activeSeg?.translated_text || activeSeg?.original_text || "";
+        if (state.showLiveSubtitles && subtitleText) {
+            liveSubtitleOverlay.querySelector("span").textContent = subtitleText;
+            liveSubtitleOverlay.classList.remove("hidden");
+        } else {
+            liveSubtitleOverlay.classList.add("hidden");
+        }
+    }
+
+    if (btnToggleLiveSubtitles) {
+        btnToggleLiveSubtitles.addEventListener("click", () => {
+            state.showLiveSubtitles = !state.showLiveSubtitles;
+            btnToggleLiveSubtitles.setAttribute("aria-pressed", String(state.showLiveSubtitles));
+            btnToggleLiveSubtitles.title = state.showLiveSubtitles
+                ? "បិទ Subtitle ក្នុងផ្ទាំងមើល"
+                : "បើក Subtitle ក្នុងផ្ទាំងមើល";
+            const label = btnToggleLiveSubtitles.querySelector("span");
+            if (label) label.textContent = state.showLiveSubtitles ? "បើក" : "បិទ";
+            updateSubtitleOverlay();
+        });
+    }
+
+    videoElement.addEventListener("timeupdate", () => {
+        const current = videoElement.currentTime;
+        const total = videoElement.duration || state.currentVideoDuration || 1;
+        videoDurationBadge.textContent = `${formatTime(current)} / ${formatTime(total)}`;
+
+        // Move Timeline Playhead
+        const percent = Math.min(100, Math.max(0, (current / total) * 100));
+        timelinePlayhead.style.left = `${percent}%`;
+        if (timelineCurrentTime) {
+            timelineCurrentTime.textContent = formatTimeDetailed(current);
+        }
+
+        // Auto-scroll timeline to follow playhead when playing
+        if (!videoElement.paused && timelineContainer && timelineContentWrapper) {
+            const playheadPx = (percent / 100) * timelineContentWrapper.offsetWidth;
+            const scrollLeft = timelineContainer.scrollLeft;
+            const viewWidth = timelineContainer.clientWidth;
+            if (playheadPx < scrollLeft || playheadPx > scrollLeft + viewWidth - 80) {
+                timelineContainer.scrollLeft = Math.max(0, playheadPx - viewWidth / 4);
+            }
+        }
+
+        // Match Live Subtitle & Synchronized Dubbing Preview
+        const activeSeg = state.segments.find(s => current >= s.start && current <= s.end);
+        if (currentPlayingAudioSegId !== null && (!activeSeg || activeSeg.id !== currentPlayingAudioSegId)) {
+            currentPlayingAudioSegId = null;
+            previewAudioElement.pause();
+        }
+        if (activeSeg && (activeSeg.translated_text || activeSeg.original_text)) {
+            const textToShow = activeSeg.translated_text || activeSeg.original_text;
+            liveSubtitleOverlay.querySelector("span").textContent = textToShow;
+            liveSubtitleOverlay.classList.toggle("hidden", !state.showLiveSubtitles);
+            state.activeSegmentId = activeSeg.id;
+
+            // Live Dubbing Audio Sync
+            if (chkLiveVoiceSync && chkLiveVoiceSync.checked && activeSeg.audio_url) {
+                if (currentPlayingAudioSegId !== activeSeg.id && !videoElement.paused) {
+                    currentPlayingAudioSegId = activeSeg.id;
+                    previewAudioElement.src = activeSeg.audio_url;
+                    previewAudioElement.currentTime = Math.max(0, current - activeSeg.start);
+                    previewAudioElement.play().catch(() => {});
+                }
+            }
+        } else {
+            liveSubtitleOverlay.classList.add("hidden");
+            state.activeSegmentId = null;
+        }
+        updateOriginalSoundPlayback();
+    });
+
+    videoElement.addEventListener("pause", () => {
+        currentPlayingAudioSegId = null;
+        previewAudioElement.pause();
+        updateOriginalSoundPlayback();
+    });
+
+    videoElement.addEventListener("seeking", () => {
+        currentPlayingAudioSegId = null;
+        previewAudioElement.pause();
+        updateOriginalSoundPlayback();
+    });
+
+    // Timeline Seeking & Playhead Scrubbing
+    let isScrubbing = false;
+
+    function seekTimelineByEvent(e) {
+        if (!state.currentVideoFilename || !videoElement.duration) return;
+        const targetWrapper = timelineContentWrapper || timelineContainer;
+        const rect = targetWrapper.getBoundingClientRect();
+        const clickX = e.clientX - rect.left;
+        const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+        videoElement.currentTime = ratio * videoElement.duration;
+    }
+
+    if (timelineContainer) {
+        timelineContainer.addEventListener("pointerdown", (e) => {
+            if (e.target.closest("[data-seg-id]") || e.target.classList.contains("resize-handle-left") || e.target.classList.contains("resize-handle-right")) {
+                return;
+            }
+            isScrubbing = true;
+            seekTimelineByEvent(e);
+        });
+
+        window.addEventListener("pointermove", (e) => {
+            if (isScrubbing) {
+                seekTimelineByEvent(e);
+            }
+        });
+
+        window.addEventListener("pointerup", () => {
+            isScrubbing = false;
+        });
+    }
+
+    // --- Transcription (/api/transcribe-stream with Real-Time Progress) ---
+
+    btnTranscribe.addEventListener("click", async () => {
+        if (!state.currentVideoFilename) {
+            showToast("សូមផ្ទុកវីដេអូជាមុនសិន!");
+            return;
+        }
+
+        disableButton(btnTranscribe);
+        setStatus("កំពុងបម្លែងអត្ថបទ", "ម៉ាស៊ីន AI (faster-whisper) កំពុងស្តាប់ និងស្រង់អត្ថបទដើម... សូមរង់ចាំ។");
+
+        // Show live progress UI
+        liveProgressContainer.classList.remove("hidden");
+        liveProgressContainer.style.display = "block";
+        liveProgressBar.style.width = "4%";
+        liveProgressBar.classList.add("animate-pulse");
+        liveProgressPercent.textContent = "0%";
+        liveProgressLatestText.textContent = "កំពុងផ្ទុកម៉ូដែល AI...";
+        const vidDuration = videoElement.duration || state.currentVideoDuration || 0;
+        liveProgressTime.textContent = `00:00 / ${formatTime(vidDuration)}`;
+
+        // Clear existing segments for fresh run
+        resetHistory();
+        state.segments = [];
+        renderSegmentsTable();
+        renderTimelineTracks();
+
+        const formData = new FormData();
+        formData.append("filename", state.currentVideoFilename);
+        formData.append("duration", vidDuration);
+
+        try {
+            const response = await fetch("/api/transcribe-stream", {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "ការបម្លែងអត្ថបទបរាជ័យ");
+            }
+
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = "";
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+
+                buffer += decoder.decode(value, { stream: true });
+                const parts = buffer.split("\n\n");
+                buffer = parts.pop(); // keep remainder
+
+                for (const part of parts) {
+                    const lines = part.split("\n");
+                    for (const rawLine of lines) {
+                        const trimmed = rawLine.trim();
+                        if (!trimmed.startsWith("data:")) continue;
+                        const jsonStr = trimmed.slice(5).trim();
+                        try {
+                            const event = JSON.parse(jsonStr);
+                            if (event.type === "status") {
+                                liveProgressLatestText.textContent = event.message;
+                            } else if (event.type === "init") {
+                                liveProgressTime.textContent = `00:00 / ${formatTime(event.total_duration)}`;
+                            } else if (event.type === "progress") {
+                                liveProgressBar.classList.remove("animate-pulse");
+                                const pct = event.percent;
+                                liveProgressBar.style.width = `${Math.max(3, pct)}%`;
+                                liveProgressPercent.textContent = `${pct}%`;
+                                liveProgressTime.textContent = `${formatTime(event.current_time)} / ${formatTime(event.total_duration)}`;
+                                liveProgressLatestText.textContent = event.segment.original_text;
+
+                                // Stream new segment into table and timeline in real-time
+                                state.segments.push(event.segment);
+                                // Avoid rebuilding the full table and timeline for every streamed segment.
+                                if (state.segments.length % 250 === 0) renderSegmentsTable();
+                            } else if (event.type === "complete") {
+                                state.segments = event.segments || state.segments;
+                                liveProgressBar.classList.remove("animate-pulse");
+                                liveProgressBar.style.width = "100%";
+                                liveProgressPercent.textContent = "100%";
+                                liveProgressLatestText.textContent = `ការបម្លែងបានបញ្ចប់ ១០០%! (សរុប ${event.total_count} segments)`;
+
+                                setTimeout(() => {
+                                    liveProgressContainer.classList.add("hidden");
+                                    liveProgressContainer.style.display = "none";
+                                }, 3000);
+
+                                renderSegmentsTable();
+                                renderTimelineTracks();
+                                enableButton(btnTranscribe);
+                                enableButton(btnTranslate);
+                                if (btnExportSrt) enableButton(btnExportSrt);
+                                setStatus("ជោគជ័យ", "ការបម្លែងអត្ថបទដើមបានសម្រេច! លោកអ្នកអាចចុច 'បកប្រែ' ទៅជាភាសាខ្មែរ។");
+                                showToast("ការបម្លែងសំឡេងទៅជាអត្ថបទបានជោគជ័យ!");
+                            } else if (event.type === "error") {
+                                throw new Error(event.message);
+                            }
+                        } catch (parseErr) {
+                            console.error("SSE parse error", parseErr, jsonStr);
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            console.error(error);
+            enableButton(btnTranscribe);
+            liveProgressContainer.classList.add("hidden");
+            liveProgressContainer.style.display = "none";
+            showToast(`កំហុសក្នុងការបម្លែងអត្ថបទ: ${error.message}`);
+            setStatus("បរាជ័យ", error.message, true);
+        }
+    });
+
+    // --- Translation (/api/translate via Stateless Gemini API) ---
+
+    function untranslatedSegments() {
+        return state.segments.filter(seg =>
+            !String(seg.translated_text || "").trim() || String(seg.status || "").startsWith("បរាជ័យបកប្រែ:")
+        );
+    }
+
+    function setTranslateButtonLabel(text) {
+        const label = btnTranslate.querySelector("span");
+        if (label) label.textContent = text;
+    }
+
+    btnTranslate.addEventListener("click", async () => {
+        if (state.segments.length === 0) {
+            showToast("មិនទាន់មាន Segment អត្ថបទសម្រាប់បកប្រែទេ!");
+            return;
+        }
+
+        const apiKey = localStorage.getItem("gemini_api_key");
+        if (!apiKey) {
+            showToast("សូមបញ្ចូល Gemini API Key នៅក្នុងការកំណត់ជាមុនសិន!");
+            settingsModal.classList.remove("hidden");
+            return;
+        }
+
+        const pendingSegments = untranslatedSegments();
+        if (!pendingSegments.length) {
+            setStatus("រួចរាល់", "Segments ទាំងអស់មានអត្ថបទបកប្រែរួចហើយ។");
+            showToast("មិនមាន Segment ដែលនៅសល់ត្រូវបកប្រែទេ។", "success");
+            return;
+        }
+
+        disableButton(btnTranslate);
+        setTranslateButtonLabel("កំពុងបកប្រែ...");
+        setStatus("កំពុងបកប្រែ", `កំពុងបកប្រែ ${pendingSegments.length} segments ដែលនៅសល់...`);
+        liveProgressContainer.style.display = "";
+        liveProgressContainer.classList.remove("hidden");
+        liveProgressTitle.innerHTML = `<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-white animate-pulse"></span><span>កំពុងបកប្រែជាភាសាខ្មែរ (Gemini AI)...</span></span>`;
+        liveProgressBar.style.width = "0%";
+        liveProgressPercent.textContent = "0%";
+        liveProgressLatestText.textContent = `នៅសល់ ${pendingSegments.length} segments...`;
+        liveProgressTime.textContent = "";
+
+        const model = localStorage.getItem("gemini_model") || (geminiModelSelect ? geminiModelSelect.value : "gemini-3.8-flash");
+        const tone = localStorage.getItem("translation_tone") || (translationToneSelect ? translationToneSelect.value : "conversational");
+        const glossary = localStorage.getItem("custom_glossary") || (customGlossaryInput ? customGlossaryInput.value : "");
+        const BATCH_SIZE = 20;
+        let completed = 0;
+        let activeBatch = [];
+
+        try {
+            for (let offset = 0; offset < pendingSegments.length; offset += BATCH_SIZE) {
+                activeBatch = pendingSegments.slice(offset, offset + BATCH_SIZE);
+                const response = await fetch("/api/translate", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "X-Gemini-Api-Key": apiKey,
+                        "X-Gemini-Model": model
+                    },
+                    body: JSON.stringify({ segments: activeBatch, tone, glossary })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    const requestError = new Error(err.detail || `ការបកប្រែបរាជ័យ (${response.status})`);
+                    requestError.status = response.status;
+                    throw requestError;
+                }
+
+                const data = await response.json();
+                if (!Array.isArray(data.segments) || !data.segments.length) {
+                    throw new Error("ម៉ាស៊ីនបម្រើមិនបានផ្ញើលទ្ធផលបកប្រែមកវិញទេ។");
+                }
+
+                const translatedById = new Map(data.segments.map(seg => [Number(seg.id), seg]));
+                recordUndo();
+                state.segments = state.segments.map(seg => translatedById.get(Number(seg.id)) || seg);
+                activeBatch.forEach(seg => {
+                    const translated = translatedById.get(Number(seg.id));
+                    if (translated) translated.translated_text = String(translated.translated_text || "").trim();
+                });
+                completed += activeBatch.length;
+                renderSegmentsTable();
+                renderTimelineTracks();
+                saveAutosaveSnapshot();
+                activeBatch = [];
+
+                const done = state.segments.length - untranslatedSegments().length;
+                const percent = Math.round((done / state.segments.length) * 100);
+                liveProgressBar.style.width = `${percent}%`;
+                liveProgressPercent.textContent = `${percent}%`;
+                liveProgressLatestText.textContent = `បានរក្សាទុកលទ្ធផល ${done}/${state.segments.length} segments`;
+            }
+
+            const remaining = untranslatedSegments().length;
+            if (state.segments.some(seg => String(seg.translated_text || "").trim())) enableButton(btnGenerateVoice);
+            if (btnExportSrt && state.segments.some(seg => String(seg.translated_text || "").trim())) enableButton(btnExportSrt);
+
+            if (remaining) {
+                const done = state.segments.length - remaining;
+                enableButton(btnTranslate);
+                setTranslateButtonLabel(`បន្តបកប្រែ (${remaining})`);
+                liveProgressContainer.classList.add("hidden");
+                setStatus("នៅមានការបកប្រែ", `បានរក្សាទុកលទ្ធផលរួច ${done} segments; នៅសល់ ${remaining}។ ចុច «បកប្រែ» ម្ដងទៀតដើម្បីបន្ត។`, true);
+                showToast(`បានរក្សាទុកលទ្ធផលរួច ${done} segments។ អាចចុចបកប្រែម្ដងទៀតដើម្បីបន្ត។`, "error");
+                return;
+            }
+
+            liveProgressBar.style.width = "100%";
+            liveProgressPercent.textContent = "100%";
+            liveProgressLatestText.textContent = "ការបកប្រែបានបញ្ចប់!";
+            saveAutosaveSnapshot();
+            setTimeout(() => liveProgressContainer.classList.add("hidden"), 1500);
+            enableButton(btnTranslate);
+            setTranslateButtonLabel("បកប្រែ");
+            setStatus("ជោគជ័យ", `បានបកប្រែ និងរក្សាទុក ${completed} segments ដែលនៅសល់។`);
+            if (completed > 0 && await showAppConfirm("ការបកប្រែជាភាសាខ្មែរបានជោគជ័យ!\n\nតើអ្នកចង់បង្កើតសំឡេង AI និយាយខ្មែរឥឡូវនេះដែរឬទេ?", { title: "បង្កើតសំឡេង", confirmText: "បង្កើតសំឡេង" })) {
+                btnGenerateVoice.click();
+            }
+        } catch (error) {
+            console.error(error);
+            if (error.status !== 401 && activeBatch.length) {
+                const reason = String(error.message || "កំហុសបណ្តាញ").slice(0, 45);
+                activeBatch.forEach(batchSeg => {
+                    const current = state.segments.find(seg => Number(seg.id) === Number(batchSeg.id));
+                    if (current && !String(current.translated_text || "").trim()) current.status = `បរាជ័យបកប្រែ: ${reason}`;
+                });
+                renderSegmentsTable();
+                saveAutosaveSnapshot();
+            }
+            enableButton(btnTranslate);
+            liveProgressContainer.classList.add("hidden");
+            if (error.status === 401) {
+                setTranslateButtonLabel("បកប្រែ");
+                showToast(error.message || "Gemini API Key មិនត្រឹមត្រូវទេ! សូមពិនិត្យការកំណត់ឡើងវិញ។");
+                settingsModal.classList.remove("hidden");
+                setStatus("បញ្ហាសោ API", "សូមពិនិត្យមើល Gemini API Key របស់អ្នក។", true);
+            } else {
+                const remaining = untranslatedSegments().length;
+                setTranslateButtonLabel(remaining ? `បន្តបកប្រែ (${remaining})` : "បកប្រែ");
+                const savedCount = state.segments.length - remaining;
+                const message = `${error.message} លទ្ធផល ${savedCount} segments ដែលបានបកប្រែរួចត្រូវបានរក្សាទុក។ ចុច «បន្តបកប្រែ» ដើម្បីបន្ត។`;
+                showToast(message, "error");
+                setStatus("ការភ្ជាប់ត្រូវបានរំខាន", message, true);
+            }
+        }
+    });
+
+    // --- Text-To-Speech Voice Generation (/api/generate-voice) ---
+
+    async function runVoiceGeneration(targetSegments, askToExport = false) {
+        if (!targetSegments.length) {
+            showToast("មិនមាន Segment ដែលត្រូវបង្កើតសំឡេងទេ!");
+            return;
+        }
+
+        const generateWasDisabled = btnGenerateVoice.disabled;
+        disableButton(btnGenerateVoice);
+        if (btnRetryFailedVoice) btnRetryFailedVoice.disabled = true;
+        setStatus("កំពុងបង្កើតសំឡេង", `កំពុងបង្កើតសំឡេង AI សម្រាប់ ${targetSegments.length} segments...`);
+        liveProgressContainer.classList.remove("hidden");
+        liveProgressTitle.innerHTML = `<span class="flex items-center gap-2"><span class="w-2 h-2 rounded-full bg-white animate-pulse"></span><span>កំពុងបង្កើតសំឡេងនិយាយ (TTS)...</span></span>`;
+        liveProgressBar.style.width = "60%";
+        liveProgressPercent.textContent = "កំពុងដំណើរការ...";
+        liveProgressLatestText.textContent = `កំពុងសំយោគសំឡេងខ្មែរ ${targetSegments.length} segments...`;
+        liveProgressTime.textContent = "";
+
+        const maleRate = parseInt(localStorage.getItem("male_rate") || (maleRateInput ? maleRateInput.value : 0)) || 0;
+        const malePitch = parseInt(localStorage.getItem("male_pitch") || (malePitchInput ? malePitchInput.value : 0)) || 0;
+        const femaleRate = parseInt(localStorage.getItem("female_rate") || (femaleRateInput ? femaleRateInput.value : 0)) || 0;
+        const femalePitch = parseInt(localStorage.getItem("female_pitch") || (femalePitchInput ? femalePitchInput.value : 0)) || 0;
+
+        try {
+            const response = await fetch("/api/generate-voice", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    segments: targetSegments,
+                    male_rate: maleRate,
+                    male_pitch: malePitch,
+                    female_rate: femaleRate,
+                    female_pitch: femalePitch,
+                    auto_fit: true
+                })
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "ការបង្កើតសំឡេងបរាជ័យ");
+            }
+
+            const data = await response.json();
+            const updatedById = new Map((data.segments || []).map(seg => [Number(seg.id), seg]));
+            recordUndo();
+            state.segments = state.segments.map(seg => updatedById.get(Number(seg.id)) || seg);
+            audioFitIssueById.clear();
+            renderSegmentsTable();
+            renderTimelineTracks();
+            scheduleAutosave();
+
+            const resultSegments = targetSegments.map(seg => updatedById.get(Number(seg.id))).filter(Boolean);
+            const failedCount = resultSegments.filter(seg => !seg.audio_url || String(seg.status || "").startsWith("បរាជ័យ:")).length;
+            const successCount = resultSegments.length - failedCount;
+            liveProgressBar.style.width = "100%";
+            liveProgressPercent.textContent = "100%";
+            liveProgressLatestText.textContent = `បានបង្កើត ${successCount} · បរាជ័យ ${failedCount}`;
+            setTimeout(() => liveProgressContainer.classList.add("hidden"), 2500);
+
+            if (state.segments.some(seg => seg.audio_url)) enableButton(btnExportVideo);
+            const summary = failedCount
+                ? `បានបង្កើត ${successCount} segments; នៅសល់បរាជ័យ ${failedCount} segments។ អាចចុចប៊ូតុងសាកម្ដងទៀត។`
+                : `បានបង្កើតសំឡេងរួចរាល់ ${successCount} segments។`;
+            setStatus(failedCount ? "បង្កើតសំឡេងបានខ្លះ" : "ជោគជ័យ", summary, failedCount > 0);
+            if (failedCount) showToast(summary, "error");
+
+            if (askToExport && failedCount === 0 && successCount > 0 && await showAppConfirm("ការបង្កើតសំឡេងនិយាយខ្មែរបានជោគជ័យ!\n\nតើអ្នកចង់នាំចេញវីដេអូដែលមានសំឡេង AI ឥឡូវនេះដែរឬទេ?", { title: "បង្កើតសំឡេង", confirmText: "នាំចេញ" })) {
+                btnExportVideo.click();
+            }
+        } catch (error) {
+            console.error(error);
+            recordUndo();
+            const reason = String(error.message || "កំហុសមិនស្គាល់").slice(0, 55);
+            targetSegments.forEach(seg => {
+                const current = state.segments.find(item => Number(item.id) === Number(seg.id));
+                if (current) current.status = `បរាជ័យ: ${reason}`;
+            });
+            renderSegmentsTable();
+            scheduleAutosave();
+            showToast(`កំហុសក្នុងការបង្កើតសំឡេង: ${error.message}`);
+            setStatus("បរាជ័យ", error.message, true);
+        } finally {
+            if (!generateWasDisabled) enableButton(btnGenerateVoice);
+            isRetryingFailedVoice = false;
+            updateRetryFailedVoiceButton();
+            liveProgressContainer.classList.add("hidden");
+        }
+    }
+
+    btnGenerateVoice.addEventListener("click", async () => {
+        await runVoiceGeneration([...state.segments], true);
+    });
+
+    if (btnRetryFailedVoice) btnRetryFailedVoice.addEventListener("click", async () => {
+        const retrySegments = failedVoiceSegments();
+        if (!retrySegments.length || isRetryingFailedVoice) return;
+        isRetryingFailedVoice = true;
+        updateRetryFailedVoiceButton();
+        await runVoiceGeneration(retrySegments, false);
+    });
+
+    // --- Remove Voice Track (/api/remove-voice) ---
+
+    btnRemoveVoice.addEventListener("click", async () => {
+        if (!state.currentVideoFilename) {
+            showToast("សូមផ្ទុកវីដេអូជាមុនសិន!");
+            return;
+        }
+
+        disableButton(btnRemoveVoice);
+        setStatus("កំពុងលុបសំឡេងដើម", "ប្រព័ន្ធកំពុងបំបែក និងលុបសំឡេងចេញពីវីដេអូ...");
+
+        try {
+            const response = await fetch("/api/remove-voice", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    video_filename: state.currentVideoFilename
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "ការលុបសំឡេងបរាជ័យ");
+            }
+
+            const data = await response.json();
+            if (!data.video_url || !data.filename) throw new Error("ម៉ាស៊ីនមេមិនបានផ្ញើឯកសារវីដេអូលទ្ធផលមកទេ។");
+
+            const resumeAt = Number(videoElement.currentTime) || 0;
+            state.currentVideoFilename = data.filename;
+            state.currentVideoFile = null;
+            lblCurrentFilename.textContent = data.filename;
+            videoElement.src = data.video_url;
+            videoElement.controls = true;
+            videoElement.load();
+            scheduleAutosave();
+            videoElement.onloadedmetadata = () => {
+                if (Number.isFinite(videoElement.duration) && videoElement.duration > 0) {
+                    state.currentVideoDuration = videoElement.duration;
+                    videoDurationBadge.textContent = `00:00 / ${formatTime(videoElement.duration)}`;
+                    videoElement.currentTime = Math.min(resumeAt, Math.max(0, videoElement.duration - 0.05));
+                    scheduleAutosave();
+                }
+            };
+            if (lblAudioStatus) {
+                lblAudioStatus.textContent = "សំឡេងដើមត្រូវបានលុប";
+                lblAudioStatus.className = "px-2 py-0.5 rounded bg-base-800 border border-base-750 text-[11px] text-base-400";
+            }
+            const removeVoiceLabel = btnRemoveVoice.querySelector("span");
+            if (removeVoiceLabel) removeVoiceLabel.textContent = "បានលុបសំឡេងដើម";
+
+            enableButton(btnRemoveVoice);
+            updateProjectDirtyStatus();
+            setStatus("ជោគជ័យ", "បានបង្កើតវីដេអូគ្មានសំឡេងដើម និងបើកលទ្ធផលក្នុង player រួចរាល់!");
+            showToast("បានលុបសំឡេងដើម ហើយប្ដូរ player ទៅវីដេអូលទ្ធផលរួចរាល់!");
+        } catch (error) {
+            console.error(error);
+            enableButton(btnRemoveVoice);
+            showToast(`កំហុសក្នុងការលុបសំឡេង: ${error.message}`);
+            setStatus("បរាជ័យ", error.message, true);
+        }
+    });
+
+    // --- Video Export Flow (/api/export-video) ---
+
+    btnExportVideo.addEventListener("click", () => {
+        exportModal.classList.remove("hidden");
+        syncRightsReviewControls();
+        renderExportPreflight();
+        exportProgressContainer.classList.add("hidden");
+        exportSuccessContainer.classList.add("hidden");
+        btnConfirmExport.disabled = false;
+    });
+
+    btnCloseExportModal.addEventListener("click", () => {
+        exportModal.classList.add("hidden");
+    });
+
+    btnCancelExport.addEventListener("click", () => {
+        exportModal.classList.add("hidden");
+    });
+    if (btnRefreshExportCheck) btnRefreshExportCheck.addEventListener("click", renderExportPreflight);
+    rightsReviewCheckboxes.forEach(input => input.addEventListener("change", () => {
+        state.copyrightReview[input.dataset.rightsKey] = input.checked;
+        updateRightsReviewProgress();
+        scheduleAutosave();
+    }));
+    if (rightsReviewNotes) rightsReviewNotes.addEventListener("input", () => {
+        state.copyrightReview.notes = rightsReviewNotes.value;
+        scheduleAutosave();
+    });
+
+        const subStylerPanel = document.getElementById("subStylerPanel");
+    if (chkBurnSubtitles && subStylerPanel) {
+        chkBurnSubtitles.addEventListener("change", () => {
+            subStylerPanel.classList.toggle("hidden", !chkBurnSubtitles.checked);
+        });
+    }
+
+    btnConfirmExport.addEventListener("click", async () => {
+        const preflight = renderExportPreflight();
+        if (preflight.blocking) {
+            showToast("សូមផ្ទុកវីដេអូ និងបន្ថែម segments មុននាំចេញ។", "error");
+            return;
+        }
+        if (preflight.warnings.length) {
+            const warningText = preflight.warnings.map(row => `• ${row.label}`).join("\n");
+            const proceed = await showAppConfirm(`មុននាំចេញ សូមពិនិត្យចំណុចខាងក្រោម:\n\n${warningText}\n\nតើអ្នកចង់បន្តនាំចេញទេ?`, { title: "ពិនិត្យមុននាំចេញ", confirmText: "បន្តនាំចេញ" });
+            if (!proceed) return;
+        }
+        const audioOption = document.querySelector('input[name="exportAudioOption"]:checked')?.value || "sidechain";
+        const muteOriginal = (audioOption === "mute");
+        const burnSubtitles = chkBurnSubtitles ? chkBurnSubtitles.checked : false;
+
+        btnConfirmExport.disabled = true;
+        exportProgressContainer.classList.remove("hidden");
+        exportSuccessContainer.classList.add("hidden");
+        setStatus("កំពុងនាំចេញវីដេអូ", "FFmpeg កំពុងផ្គុំរូបភាព សំឡេង និង Subtitle... សូមរង់ចាំ។");
+
+        try {
+            const response = await fetch("/api/export-video", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    video_filename: state.currentVideoFilename,
+                    segments: state.segments,
+                    audio_mode: audioOption,
+                    mute_original_audio: muteOriginal,
+                    background_volume: muteOriginal ? 0.0 : 0.15,
+                    burn_subtitles: burnSubtitles,
+                    sub_font_size: Number(exportSubFontSize?.value || 20),
+                    sub_color: exportSubColor?.value || "white",
+                    sub_style: exportSubStyle?.value || "box",
+                    sub_position: exportSubPosition?.value || "bottom"
+                })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.detail || "ការនាំចេញវីដេអូបរាជ័យ");
+            }
+
+            const data = await response.json();
+            exportProgressContainer.classList.add("hidden");
+            exportSuccessContainer.classList.remove("hidden");
+            exportDownloadLink.href = data.download_url;
+
+            setStatus("ជោគជ័យ", "ការនាំចេញវីដេអូបានសម្រេចដោយជោគជ័យ!");
+            showToast("ការនាំចេញវីដេអូបានសម្រេចដោយជោគជ័យ!");
+        } catch (error) {
+            console.error(error);
+            exportProgressContainer.classList.add("hidden");
+            btnConfirmExport.disabled = false;
+            showToast(`កំហុសក្នុងការនាំចេញវីដេអូ: ${error.message}`);
+            setStatus("បរាជ័យ", error.message, true);
+        }
+    });
+
+    // --- Multi-Speaker Voice Controls (Idea 1) ---
+
+    if (btnAutoDetectSpeakers) {
+        btnAutoDetectSpeakers.addEventListener("click", async () => {
+            if (!state.currentVideoFilename) {
+                showToast("សូមផ្ទុកវីដេអូជាមុនសិន!");
+                return;
+            }
+            if (state.segments.length === 0) {
+                showToast("មិនទាន់មាន Segment នៅក្នុងតារាងទេ!");
+                return;
+            }
+
+            disableButton(btnAutoDetectSpeakers);
+            setStatus("កំពុងវិភាគសំឡេង", "ប្រព័ន្ធកំពុងវិភាគកម្ពស់រលកសំឡេង (Pitch Analysis) ដើម្បីបែងចែកតួប្រុស និងតួស្រី...");
+
+            try {
+                const response = await fetch("/api/detect-speakers", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        video_filename: state.currentVideoFilename,
+                        segments: state.segments
+                    })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "ការវិភាគសំឡេងបរាជ័យ");
+                }
+
+                const data = await response.json();
+                if (data.segments && Array.isArray(data.segments)) {
+                    recordUndo();
+                    state.segments = data.segments;
+                    renderSegmentsTable();
+                    renderTimelineTracks();
+                }
+
+                enableButton(btnAutoDetectSpeakers);
+                setStatus("ជោគជ័យ", "បានវិភាគសំឡេង និងកំណត់តួអង្គប្រុស/ស្រីដោយជោគជ័យ!");
+                showToast("បានវិភាគរលកសំឡេង និងកំណត់តួអង្គប្រុស (Piseth) / ស្រី (Sreymom) ដោយជោគជ័យ!");
+            } catch (error) {
+                console.error(error);
+                enableButton(btnAutoDetectSpeakers);
+                showToast(`កំហុសក្នុងការវិភាគសំឡេង: ${error.message}`);
+                setStatus("បរាជ័យ", error.message, true);
+            }
+        });
+    }
+
+    if (btnAlternateVoices) {
+        btnAlternateVoices.addEventListener("click", () => {
+            if (state.segments.length === 0) {
+                showToast("មិនទាន់មាន Segment នៅក្នុងតារាងទេ!");
+                return;
+            }
+            recordUndo();
+            state.segments.forEach((seg, idx) => {
+                seg.voice_profile = (idx % 2 === 0) ? "km-KH-PisethNeural" : "km-KH-SreymomNeural";
+            });
+            renderSegmentsTable();
+            renderTimelineTracks();
+            setStatus("ប្តូរតួអង្គ", "បានកំណត់ឆ្លាស់តួអង្គប្រុស (Piseth) និងស្រី (Sreymom) តាមបន្ទាត់នីមួយៗ!");
+        });
+    }
+
+    if (btnAllMale) {
+        btnAllMale.addEventListener("click", () => {
+            if (state.segments.length === 0) {
+                showToast("មិនទាន់មាន Segment នៅក្នុងតារាងទេ!");
+                return;
+            }
+            recordUndo();
+            state.segments.forEach(seg => {
+                seg.voice_profile = "km-KH-PisethNeural";
+            });
+            renderSegmentsTable();
+            renderTimelineTracks();
+            setStatus("ប្តូរតួអង្គ", "បានកំណត់គ្រប់ Segment ទាំងអស់ជាសំឡេងតួប្រុស (Piseth)!");
+        });
+    }
+
+    if (btnAllFemale) {
+        btnAllFemale.addEventListener("click", () => {
+            if (state.segments.length === 0) {
+                showToast("មិនទាន់មាន Segment នៅក្នុងតារាងទេ!");
+                return;
+            }
+            recordUndo();
+            state.segments.forEach(seg => {
+                seg.voice_profile = "km-KH-SreymomNeural";
+            });
+            renderSegmentsTable();
+            renderTimelineTracks();
+            setStatus("ប្តូរតួអង្គ", "បានកំណត់គ្រប់ Segment ទាំងអស់ជាសំឡេងតួស្រី (Sreymom)!");
+        });
+    }
+
+    // --- Subtitle Export (.SRT) ---
+
+    function formatSrtTimestamp(seconds) {
+        if (isNaN(seconds) || seconds < 0) seconds = 0;
+        const totalMs = Math.round(seconds * 1000);
+        const hrs = Math.floor(totalMs / 3600000);
+        const mins = Math.floor((totalMs % 3600000) / 60000);
+        const secs = Math.floor((totalMs % 60000) / 1000);
+        const ms = totalMs % 1000;
+        return `${hrs.toString().padStart(2, "0")}:${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")},${ms.toString().padStart(3, "0")}`;
+    }
+
+    if (btnExportSrt) {
+        btnExportSrt.addEventListener("click", () => {
+            if (state.segments.length === 0) {
+                showToast("មិនទាន់មាន Segment សម្រាប់នាំចេញ Subtitle ទេ!");
+                return;
+            }
+
+            let srtText = "";
+            state.segments.forEach((seg, index) => {
+                const text = (seg.translated_text || seg.original_text || "").trim();
+                srtText += `${index + 1}\r\n`;
+                srtText += `${formatSrtTimestamp(seg.start)} --> ${formatSrtTimestamp(seg.end)}\r\n`;
+                srtText += `${text}\r\n\r\n`;
+            });
+
+            const blob = new Blob([srtText], { type: "text/plain;charset=utf-8" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const baseName = state.currentVideoFilename ? state.currentVideoFilename.replace(/\.[^/.]+$/, "") : "subtitles";
+            a.download = `${baseName}_khmer.srt`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+
+            setStatus("នាំចេញ Subtitle", "បានទាញយកឯកសារ Subtitle (.SRT) ភាសាខ្មែរដោយជោគជ័យ!");
+            showToast("បានទាញយកឯកសារ Subtitle (.SRT) ជាភាសាខ្មែរដោយជោគជ័យ!");
+        });
+    }
+
+    // --- Project Save & Load (.dubproj) ---
+
+    if (btnSaveProject) {
+        btnSaveProject.addEventListener("click", () => {
+            if (state.segments.length === 0 && !state.currentVideoFilename) {
+                showToast("មិនទាន់មានទិន្នន័យគម្រោងសម្រាប់រក្សាទុកទេ!");
+                return;
+            }
+
+            const projectData = {
+                app: "AI_DUBBER",
+                version: "1.0",
+                saved_at: new Date().toISOString(),
+                video_filename: state.currentVideoFilename,
+                video_duration: state.currentVideoDuration,
+                copyright_review: state.copyrightReview,
+                segments: state.segments
+            };
+
+            const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const baseName = state.currentVideoFilename ? state.currentVideoFilename.replace(/\.[^/.]+$/, "") : "dubbing_project";
+            a.download = `${baseName}.dubproj`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            markProjectClean();
+
+            setStatus("រក្សាទុកគម្រោង", "បានរក្សាទុកឯកសារគម្រោង (.dubproj) ដោយជោគជ័យ!");
+            showToast("បានរក្សាទុកឯកសារគម្រោង (.dubproj) ដោយជោគជ័យ!");
+        });
+    }
+
+    if (btnOpenProject) {
+        btnOpenProject.addEventListener("click", () => {
+            projectFileInput.click();
+        });
+    }
+
+    if (projectFileInput) {
+        projectFileInput.addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const data = JSON.parse(event.target.result);
+                    if (data.segments && Array.isArray(data.segments)) {
+                        resetHistory();
+                        state.segments = data.segments;
+                        state.copyrightReview = { ...defaultRightsReview(), ...(data.copyright_review || {}) };
+                        syncRightsReviewControls();
+                        if (data.video_filename) {
+                            state.currentVideoFilename = data.video_filename;
+                            lblCurrentFilename.textContent = data.video_filename;
+                        }
+                        if (data.video_duration) {
+                            state.currentVideoDuration = data.video_duration;
+                            videoDurationBadge.textContent = `00:00 / ${formatTime(data.video_duration)}`;
+                        }
+
+                        markProjectClean();
+                        renderSegmentsTable();
+                        renderTimelineTracks();
+
+                        enableButton(btnTranslate);
+                        enableButton(btnGenerateVoice);
+                        if (btnExportSrt) enableButton(btnExportSrt);
+
+                        setStatus("បើកគម្រោង", `បានបើកគម្រោងដោយជោគជ័យ (សរុប ${state.segments.length} segments)!`);
+                        showToast(`បានផ្ទុកទិន្នន័យគម្រោងដោយជោគជ័យ (${state.segments.length} segments)!`);
+                    } else {
+                        showToast("ទម្រង់ឯកសារគម្រោងមិនត្រឹមត្រូវ!");
+                    }
+                } catch (parseErr) {
+                    console.error(parseErr);
+                    showToast("កំហុសក្នុងការអានឯកសារគម្រោង: " + parseErr.message);
+                }
+            };
+            reader.readAsText(file);
+            projectFileInput.value = ""; // Reset file input
+        });
+    }
+
+    // --- Video URL Download Modal Logic (yt-dlp) ---
+
+    if (btnOpenLinkModal) {
+        btnOpenLinkModal.addEventListener("click", () => {
+            urlDownloadModal.classList.remove("hidden");
+            urlDownloadProgress.classList.add("hidden");
+            videoUrlInput.value = "";
+            btnConfirmDownloadUrl.disabled = false;
+        });
+    }
+
+    if (btnCloseUrlModal) {
+        btnCloseUrlModal.addEventListener("click", () => {
+            urlDownloadModal.classList.add("hidden");
+        });
+    }
+
+    if (btnCancelUrlDownload) {
+        btnCancelUrlDownload.addEventListener("click", () => {
+            urlDownloadModal.classList.add("hidden");
+        });
+    }
+
+    if (btnConfirmDownloadUrl) {
+        btnConfirmDownloadUrl.addEventListener("click", async () => {
+            const url = videoUrlInput.value.trim();
+            if (!url) {
+                showToast("សូមបញ្ចូល Link វីដេអូត្រឹមត្រូវមួយ!");
+                return;
+            }
+
+            btnConfirmDownloadUrl.disabled = true;
+            urlDownloadProgress.classList.remove("hidden");
+            setStatus("កំពុងទាញយកវីដេអូ", "ប្រព័ន្ធកំពុងទាញយកវីដេអូពី Link... សូមរង់ចាំ។");
+
+            try {
+                const response = await fetch("/api/download-url", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: url })
+                });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    throw new Error(err.detail || "ការទាញយកវីដេអូបរាជ័យ");
+                }
+
+                const data = await response.json();
+                if (state.currentVideoFilename !== data.filename) state.copyrightReview = defaultRightsReview();
+                state.currentVideoFilename = data.filename;
+                state.currentVideoDuration = data.duration || 0;
+                if (lblAudioStatus) lblAudioStatus.textContent = "សំឡេងដើម";
+                const removeVoiceLabel = btnRemoveVoice.querySelector("span");
+                if (removeVoiceLabel) removeVoiceLabel.textContent = "លុបសំឡេងដើម";
+                syncRightsReviewControls();
+                lblCurrentFilename.textContent = data.title || data.filename;
+
+                videoElement.src = data.video_url;
+                videoElement.controls = true;
+                videoEmptyPlaceholder.classList.add("hidden");
+                videoDurationBadge.textContent = `00:00 / ${formatTime(data.duration)}`;
+
+                videoElement.onloadedmetadata = () => {
+                    if (videoElement.duration && videoElement.duration > 0) {
+                        state.currentVideoDuration = videoElement.duration;
+                        videoDurationBadge.textContent = `00:00 / ${formatTime(videoElement.duration)}`;
+                    }
+                };
+
+                enableButton(btnTranscribe);
+                enableButton(btnRemoveVoice);
+                urlDownloadModal.classList.add("hidden");
+
+                setStatus("ជោគជ័យ", "បានទាញយកវីដេអូតាម Link រួចរាល់! លោកអ្នកអាចចុច 'បម្លែងអត្ថបទ'។");
+                showToast("បានទាញយកវីដេអូតាម Link ដោយជោគជ័យ!");
+            } catch (error) {
+                console.error(error);
+                urlDownloadProgress.classList.add("hidden");
+                btnConfirmDownloadUrl.disabled = false;
+                showToast(`កំហុសក្នុងការទាញយកវីដេអូ: ${error.message}`);
+                setStatus("បរាជ័យ", error.message, true);
+            }
+        });
+    }
+
+    // --- Manual Add Segment ---
+
+    btnAddSegment.addEventListener("click", () => {
+        const nextId = state.segments.length > 0 ? Math.max(...state.segments.map(s => s.id)) + 1 : 1;
+        const lastEnd = state.segments.length > 0 ? state.segments[state.segments.length - 1].end : 0;
+        
+        recordUndo();
+        state.segments.push({
+            id: nextId,
+            start: lastEnd,
+            end: lastEnd + 3.0,
+            original_text: "អត្ថបទថ្មី",
+            translated_text: "",
+            voice_profile: "km-KH-PisethNeural",
+            emotion: "ធម្មតា",
+            status: "រង់ចាំ",
+            audio_url: null
+        });
+
+        renderSegmentsTable();
+        renderTimelineTracks();
+    });
+
+    // --- Table Rendering & In-place Editing ---
+
+    if (btnSegmentsPrev) btnSegmentsPrev.addEventListener("click", () => {
+        state.segmentTablePage = Math.max(0, state.segmentTablePage - 1);
+        renderSegmentsTable();
+    });
+    if (btnSegmentsNext) btnSegmentsNext.addEventListener("click", () => {
+        state.segmentTablePage += 1;
+        renderSegmentsTable();
+    });
+
+    function renderSegmentsTable() {
+        updateRetryFailedVoiceButton();
+        updateAudioFitButton();
+        timingIssueById = computeTimingIssues();
+        updateTimingIssueSummary();
+        scheduleAutosave();
+        if (state.segments.length === 0) {
+            state.segmentTablePage = 0;
+            segmentsTableBody.innerHTML = "";
+            segmentsTableBody.appendChild(tableEmptyRow);
+            segmentsCountBadge.textContent = "0 Segment";
+            segmentsPagination?.classList.add("hidden");
+            return;
+        }
+
+        const pageCount = Math.max(1, Math.ceil(state.segments.length / SEGMENT_PAGE_SIZE));
+        state.segmentTablePage = Math.min(Math.max(0, state.segmentTablePage), pageCount - 1);
+        const pageStart = state.segmentTablePage * SEGMENT_PAGE_SIZE;
+        const pageSegments = state.segments.slice(pageStart, pageStart + SEGMENT_PAGE_SIZE);
+        segmentsCountBadge.textContent = `${state.segments.length} Segment`;
+        if (segmentsPagination) segmentsPagination.classList.toggle("hidden", pageCount <= 1);
+        if (segmentsPagination) segmentsPagination.classList.toggle("flex", pageCount > 1);
+        if (segmentsPageLabel) segmentsPageLabel.textContent = `ទំព័រ ${state.segmentTablePage + 1} / ${pageCount} · ${pageStart + 1}-${Math.min(pageStart + SEGMENT_PAGE_SIZE, state.segments.length)} / ${state.segments.length}`;
+        if (btnSegmentsPrev) btnSegmentsPrev.disabled = state.segmentTablePage === 0;
+        if (btnSegmentsNext) btnSegmentsNext.disabled = state.segmentTablePage >= pageCount - 1;
+        segmentsTableBody.innerHTML = "";
+
+        pageSegments.forEach((seg) => {
+            const isSelected = (state.selectedSegmentIds || [state.selectedSegmentId]).includes(seg.id);
+            const tr = document.createElement("tr");
+            tr.setAttribute("data-row-id", seg.id);
+            const rowIssues = [...(timingIssueById.get(seg.id) || []), ...(audioFitIssueById.get(seg.id) || [])];
+            const hasOverlap = rowIssues.some(issue => issue.type === "overlap" || issue.type === "invalid");
+            const issueClass = rowIssues.length ? (hasOverlap ? "border-l-2 border-l-red-500" : "border-l-2 border-l-amber-400") : "";
+            tr.title = rowIssues.map(issue => issue.text).join("; ");
+            tr.className = `hover:bg-base-850/60 transition border-b border-base-800 group cursor-pointer ${isSelected ? "bg-base-800/80" : ""} ${issueClass}`;
+            tr.innerHTML = `
+                <td class="py-2.5 px-3 text-center text-base-400 font-mono">${seg.id}</td>
+                <td class="py-2.5 px-3">
+                    <input type="text" inputmode="decimal" value="${formatSegmentTime(seg.start)}" title="ទម្រង់ នាទី:វិនាទី (ឧ. 02:18.42)" class="w-24 px-2 py-1 rounded bg-base-850 border border-base-750 text-base-100 text-xs font-mono focus:outline-none focus:border-base-500" data-field="start" data-id="${seg.id}">
+                </td>
+                <td class="py-2.5 px-3">
+                    <input type="text" inputmode="decimal" value="${formatSegmentTime(seg.end)}" title="ទម្រង់ នាទី:វិនាទី (ឧ. 02:18.42)" class="w-24 px-2 py-1 rounded bg-base-850 border border-base-750 text-base-100 text-xs font-mono focus:outline-none focus:border-base-500" data-field="end" data-id="${seg.id}">
+                </td>
+                <td class="py-2.5 px-3 text-base-300">
+                    <textarea rows="2" class="w-full px-2 py-1 rounded bg-base-850 border border-base-750 text-base-200 text-xs focus:outline-none focus:border-base-500 resize-none" data-field="original_text" data-id="${seg.id}">${seg.original_text || ""}</textarea>
+                </td>
+                <td class="py-2.5 px-3">
+                    <textarea rows="2" placeholder="បញ្ចូលអត្ថបទបកប្រែ..." class="w-full px-2 py-1 rounded bg-base-900 border border-base-750 text-base-100 text-xs focus:outline-none focus:border-base-400 resize-none" data-field="translated_text" data-id="${seg.id}">${seg.translated_text || ""}</textarea>
+                </td>
+                <td class="py-2.5 px-3">
+                    <div class="flex items-center gap-1.5">
+                        <span id="voiceIcon-${seg.id}" class="text-sm shrink-0 select-none" title="${getVoiceShortName(seg.voice_profile)}">
+                            ${getVoiceIcon(seg.voice_profile)}
+                        </span>
+                        <select class="w-full px-2 py-1.5 rounded bg-base-850 border border-base-750 text-xs text-base-200 focus:outline-none focus:border-base-500" data-field="voice_profile" data-id="${seg.id}">
+                            <option value="km-KH-PisethNeural" ${seg.voice_profile === "km-KH-PisethNeural" ? "selected" : ""}>👨 Piseth (ប្រុស)</option>
+                            <option value="km-KH-SreymomNeural" ${seg.voice_profile === "km-KH-SreymomNeural" ? "selected" : ""}>👩 Sreymom (ស្រី)</option>
+                            <option value="km-character-old-man" ${seg.voice_profile === "km-character-old-man" ? "selected" : ""}>👴 លោកតា (ចាស់)</option>
+                            <option value="km-character-old-woman" ${seg.voice_profile === "km-character-old-woman" ? "selected" : ""}>👵 លោកយាយ (ចាស់)</option>
+                            <option value="km-character-young-boy" ${seg.voice_profile === "km-character-young-boy" ? "selected" : ""}>👦 ក្មេងប្រុស</option>
+                            <option value="km-character-young-girl" ${seg.voice_profile === "km-character-young-girl" ? "selected" : ""}>👧 ក្មេងស្រី</option>
+                            <option value="km-character-villain" ${seg.voice_profile === "km-character-villain" ? "selected" : ""}>🧙‍♂️ តួអាក្រក់</option>
+                            <option value="km-character-narrator" ${seg.voice_profile === "km-character-narrator" ? "selected" : ""}>📢 អ្នកនិទាន</option>
+                        </select>
+                    </div>
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                    <span class="inline-block px-2 py-0.5 rounded text-[10px] font-medium ${getStatusBadgeClass(seg.status)}">
+                        ${seg.status || "រង់ចាំ"}
+                    </span>
+                    ${rowIssues.length ? `<div class="text-[9px] mt-1 ${hasOverlap ? "text-red-300" : "text-amber-300"}">⚠ ${rowIssues[0].text}</div>` : ""}
+                </td>
+                <td class="py-2.5 px-3 text-center">
+                    ${seg.audio_url ? `
+                        <button class="p-1 rounded bg-base-800 hover:bg-base-750 text-base-200 border border-base-750 transition btnPlayAudio" data-url="${seg.audio_url}">
+                            <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                        </button>
+                    ` : `<span class="text-base-600">-</span>`}
+                </td>
+            `;
+
+            tr.addEventListener("click", () => {
+                selectSegment(seg.id, true);
+            });
+
+            segmentsTableBody.appendChild(tr);
+        });
+
+        // Attach change listeners to inputs
+        segmentsTableBody.querySelectorAll("input, textarea, select").forEach(input => {
+            input.addEventListener("focus", (e) => {
+                const id = parseInt(e.target.getAttribute("data-id"));
+                if (id) selectSegment(id, false);
+            });
+
+            input.addEventListener("change", (e) => {
+                const id = parseInt(e.target.getAttribute("data-id"));
+                const field = e.target.getAttribute("data-field");
+                const targetSeg = state.segments.find(s => s.id === id);
+                if (targetSeg) {
+                    audioFitIssueById.delete(id);
+                    if (field === "start" || field === "end") {
+                        const secondsValue = parseSegmentTime(e.target.value);
+                        if (!Number.isFinite(secondsValue)) {
+                            e.target.value = formatSegmentTime(targetSeg[field]);
+                            return;
+                        }
+                        if (secondsValue !== targetSeg[field]) recordUndo();
+                        targetSeg[field] = secondsValue;
+                        e.target.value = formatSegmentTime(secondsValue);
+                        if (videoElement.duration) videoElement.currentTime = targetSeg[field];
+                    } else {
+                        if (e.target.value !== (targetSeg[field] ?? "")) {
+                            recordUndo();
+                            if (field === "translated_text") {
+                                targetSeg.audio_url = null;
+                                targetSeg.status = "បានកែប្រែ - ត្រូវបង្កើតសំឡេងឡើងវិញ";
+                            }
+                        }
+                        targetSeg[field] = e.target.value;
+                    }
+                    if (field === "voice_profile") {
+                        const iconEl = document.getElementById(`voiceIcon-${id}`);
+                        if (iconEl) {
+                            iconEl.textContent = getVoiceIcon(e.target.value);
+                            iconEl.title = getVoiceShortName(e.target.value);
+                        }
+                    }
+                    renderTimelineTracks();
+                    selectSegment(id, false);
+                    scheduleAutosave();
+                }
+            });
+        });
+
+        // Audio preview buttons
+        segmentsTableBody.querySelectorAll(".btnPlayAudio").forEach(btn => {
+            btn.addEventListener("click", () => {
+                const url = btn.getAttribute("data-url");
+                if (url) {
+                    previewAudioElement.src = url;
+                    previewAudioElement.play();
+                }
+            });
+        });
+
+        // Reinitialize icons in new table content
+        if (window.lucide) {
+            lucide.createIcons();
+        }
+    }
+
+    function getStatusBadgeClass(status) {
+        if (!status) return "bg-base-850 text-base-400 border border-base-800";
+        return "bg-base-850 text-base-300 border border-base-750";
+    }
+
+    // --- Timeline Rendering, Interactive Dragging & Adjustments ---
+
+    let activeDrag = null;
+
+    function selectSegment(segId, seek = true) {
+        state.selectedSegmentId = segId;
+        state.selectedSegmentIds = segId == null ? [] : [segId];
+        state.selectionAnchorSegmentId = segId;
+        const seg = state.segments.find(s => s.id === segId);
+        if (!seg) {
+            if (lblSelectedSegment) lblSelectedSegment.textContent = "គ្មានជម្រើស";
+            return;
+        }
+
+        updateSelectionLabel();
+
+        // Highlight matching table row
+        highlightTableRow(segId);
+
+        // Highlight timeline blocks for this segment
+        document.querySelectorAll("[data-seg-id]").forEach(el => {
+            const id = parseInt(el.getAttribute("data-seg-id"));
+            if (state.selectedSegmentIds.includes(id)) {
+                el.classList.add("ring-2", "ring-amber-400", "ring-offset-1", "ring-offset-base-950", "z-20");
+            } else {
+                el.classList.remove("ring-2", "ring-amber-400", "ring-offset-1", "ring-offset-base-950", "z-20");
+            }
+        });
+
+        // Seek video to start if requested
+        if (seek && videoElement.duration) {
+            videoElement.currentTime = seg.start;
+        }
+    }
+
+    function updateSelectionLabel() {
+        if (!lblSelectedSegment) return;
+        const ids = state.selectedSegmentIds || [];
+        if (ids.length > 1) {
+            lblSelectedSegment.textContent = `${ids.length} segments selected`;
+            lblSelectedSegment.title = "Shift-click timeline blocks to select a range; drag any selected block to move them together.";
+            return;
+        }
+        const seg = state.segments.find(s => s.id === state.selectedSegmentId);
+        lblSelectedSegment.textContent = seg
+            ? `#${seg.id} [${formatTimeDetailed(seg.start)} - ${formatTimeDetailed(seg.end)}]`
+            : "គ្មានជម្រើស";
+        lblSelectedSegment.title = seg ? `Segment #${seg.id}: ${seg.translated_text || seg.original_text || ""}` : "";
+    }
+
+    function selectSegmentRange(segId) {
+        const anchorId = state.selectionAnchorSegmentId ?? state.selectedSegmentId ?? segId;
+        const anchorIndex = state.segments.findIndex(s => s.id === anchorId);
+        const targetIndex = state.segments.findIndex(s => s.id === segId);
+        if (anchorIndex < 0 || targetIndex < 0) {
+            state.selectedSegmentIds = [segId];
+        } else {
+            const from = Math.min(anchorIndex, targetIndex);
+            const to = Math.max(anchorIndex, targetIndex);
+            state.selectedSegmentIds = state.segments.slice(from, to + 1).map(s => s.id);
+        }
+        state.selectedSegmentId = segId;
+        updateSelectionLabel();
+        highlightTableRow(segId);
+        renderTimelineTracks();
+    }
+
+    function highlightTableRow(segId) {
+        segmentsTableBody.querySelectorAll("tr[data-row-id]").forEach(r => {
+            const id = parseInt(r.getAttribute("data-row-id"));
+            if (id === segId) {
+                r.classList.add("bg-base-800/80");
+            } else {
+                r.classList.remove("bg-base-800/80");
+            }
+        });
+        const input = segmentsTableBody.querySelector(`[data-id="${segId}"]`);
+        const row = input ? input.closest("tr") : null;
+        if (row) {
+            row.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+    }
+
+    let editingSegmentId = null;
+
+    function updateSegmentModalDuration() {
+        if (!segModalDuration || !segModalStart || !segModalEnd) return;
+        const start = Number(segModalStart.value);
+        const end = Number(segModalEnd.value);
+        segModalDuration.textContent = `រយៈពេល: ${Number.isFinite(start) && Number.isFinite(end) ? Math.max(0, end - start).toFixed(2) : "0.00"}s`;
+    }
+
+    function closeSegmentEditor() {
+        segmentEditModal?.classList.add("hidden");
+        editingSegmentId = null;
+    }
+
+    function openSegmentEditor(segId = state.selectedSegmentId) {
+        const seg = state.segments.find(item => item.id === segId);
+        if (!seg || !segmentEditModal) {
+            showToast("សូមជ្រើសរើស Segment មួយជាមុនសិន។");
+            return;
+        }
+        editingSegmentId = seg.id;
+        if (segmentModalTitle) segmentModalTitle.textContent = `កែសម្រួលបន្ទាត់ Segment #${seg.id}`;
+        segModalStart.value = Number(seg.start).toFixed(2);
+        segModalEnd.value = Number(seg.end).toFixed(2);
+        segModalOriginal.value = seg.original_text || "";
+        segModalTranslated.value = seg.translated_text || "";
+        if (segModalVoice) segModalVoice.value = seg.voice_profile || "km-KH-PisethNeural";
+        updateSegmentModalDuration();
+        segmentEditModal.classList.remove("hidden");
+        segModalOriginal.focus();
+    }
+
+    function removeSegments(ids) {
+        const idSet = new Set(ids);
+        const before = state.segments.length;
+        state.segments = state.segments.filter(seg => !idSet.has(seg.id));
+        if (state.segments.length === before) return false;
+        state.selectedSegmentIds = [];
+        state.selectedSegmentId = null;
+        state.selectionAnchorSegmentId = null;
+        renderSegmentsTable();
+        renderTimelineTracks();
+        updateSubtitleOverlay();
+        updateSelectionLabel();
+        scheduleAutosave();
+        return true;
+    }
+
+    function findDuplicateSegmentGroups() {
+        const normalize = value => String(value || "").normalize("NFKC").toLocaleLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+        const buckets = new Map();
+        state.segments.forEach((seg, index) => {
+            const keys = new Set();
+            const original = normalize(seg.original_text);
+            const translated = normalize(seg.translated_text);
+            if (original.length >= 2) keys.add(`o:${original}`);
+            if (translated.length >= 2) keys.add(`t:${translated}`);
+            keys.forEach(key => {
+                if (!buckets.has(key)) buckets.set(key, []);
+                buckets.get(key).push({ seg, index });
+            });
+        });
+        const parent = state.segments.map((_, index) => index);
+        const root = index => parent[index] === index ? index : (parent[index] = root(parent[index]));
+        const union = (a, b) => { const ra = root(a), rb = root(b); if (ra !== rb) parent[rb] = ra; };
+
+        buckets.forEach(entries => {
+            if (entries.length < 2) return;
+            entries.sort((a, b) => Number(a.seg.start) - Number(b.seg.start));
+            for (let i = 0; i < entries.length; i++) {
+                const a = entries[i];
+                const aStart = Number(a.seg.start), aEnd = Number(a.seg.end);
+                for (let j = i + 1; j < entries.length; j++) {
+                    const b = entries[j];
+                    const bStart = Number(b.seg.start), bEnd = Number(b.seg.end);
+                    if (bStart >= aEnd) break;
+                    const overlap = Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
+                    const shorter = Math.max(0.01, Math.min(aEnd - aStart, bEnd - bStart));
+                    if (overlap / shorter >= 0.8) union(a.index, b.index);
+                }
+            }
+        });
+
+        const components = new Map();
+        state.segments.forEach((seg, index) => {
+            const group = root(index);
+            if (!components.has(group)) components.set(group, []);
+            components.get(group).push(seg);
+        });
+        return [...components.values()].filter(group => group.length > 1);
+    }
+
+    function splitSegmentAt(seg, splitTime) {
+        const start = Number(seg.start), end = Number(seg.end), at = Number(splitTime);
+        if (!Number.isFinite(at) || at <= start + 0.1 || at >= end - 0.1) {
+            showToast("ទីតាំងកាត់ត្រូវស្ថិតនៅកណ្ដាល Segment មិនជិតគែមពេកទេ។");
+            return false;
+        }
+        const ratio = (at - start) / (end - start);
+        const splitText = text => {
+            const value = String(text || "");
+            if (!value.trim()) return [value, value];
+            const boundary = Math.max(1, Math.min(value.length - 1, Math.round(value.length * ratio)));
+            const candidates = [value.lastIndexOf(" ", boundary), value.indexOf(" ", boundary)];
+            const valid = candidates.filter(index => index > 0 && index < value.length - 1);
+            const point = valid.length ? valid.sort((a, b) => Math.abs(a - boundary) - Math.abs(b - boundary))[0] : boundary;
+            return [value.slice(0, point).trim(), value.slice(point).trim()];
+        };
+        const [originalLeft, originalRight] = splitText(seg.original_text);
+        const [translatedLeft, translatedRight] = splitText(seg.translated_text);
+        const nextId = state.segments.reduce((max, item) => Math.max(max, Number(item.id) || 0), 0) + 1;
+        recordUndo();
+        const oldEnd = end;
+        seg.end = Math.round(at * 100) / 100;
+        seg.original_text = originalLeft;
+        seg.translated_text = translatedLeft;
+        seg.audio_url = null;
+        seg.status = "រង់ចាំ";
+        const next = {
+            ...seg,
+            id: nextId,
+            start: Math.round(at * 100) / 100,
+            end: oldEnd,
+            original_text: originalRight,
+            translated_text: translatedRight,
+            audio_url: null,
+            status: "រង់ចាំ"
+        };
+        state.segments.splice(state.segments.indexOf(seg) + 1, 0, next);
+        state.selectedSegmentId = next.id;
+        state.selectedSegmentIds = [next.id];
+        state.selectionAnchorSegmentId = next.id;
+        renderSegmentsTable();
+        renderTimelineTracks();
+        selectSegment(next.id, false);
+        updateSubtitleOverlay();
+        scheduleAutosave();
+        showToast("បានពុះ Segment ជាពីររួចរាល់។");
+        return true;
+    }
+
+    if (btnEditSelected) btnEditSelected.addEventListener("click", () => openSegmentEditor());
+    if (btnDeleteSelected) btnDeleteSelected.addEventListener("click", async () => {
+        const ids = (state.selectedSegmentIds || []).length ? state.selectedSegmentIds : [state.selectedSegmentId].filter(id => id != null);
+        if (!ids.length) return showToast("សូមជ្រើសរើស Segment មួយជាមុនសិន។");
+        const confirmed = await showAppConfirm(`លុប ${ids.length} Segment ដែលបានជ្រើសរើសមែនទេ?`, { title: "លុប Segment", confirmText: "លុប" });
+        if (confirmed) { recordUndo(); removeSegments(ids); }
+    });
+    if (btnSplitAtPlayhead) btnSplitAtPlayhead.addEventListener("click", () => {
+        const seg = state.segments.find(item => item.id === state.selectedSegmentId);
+        if (!seg) return showToast("សូមជ្រើសរើស Segment ដែលចង់ពុះជាមុនសិន។");
+        splitSegmentAt(seg, videoElement.currentTime);
+    });
+    [btnCloseSegmentModal, btnCancelSegmentModal].filter(Boolean).forEach(button => button.addEventListener("click", closeSegmentEditor));
+    if (segmentEditModal) segmentEditModal.addEventListener("click", event => { if (event.target === segmentEditModal) closeSegmentEditor(); });
+    [segModalStart, segModalEnd].filter(Boolean).forEach(input => input.addEventListener("input", updateSegmentModalDuration));
+    if (btnModalSetStartToVideo) btnModalSetStartToVideo.addEventListener("click", () => { segModalStart.value = videoElement.currentTime.toFixed(2); updateSegmentModalDuration(); });
+    if (btnModalSetEndToVideo) btnModalSetEndToVideo.addEventListener("click", () => { segModalEnd.value = videoElement.currentTime.toFixed(2); updateSegmentModalDuration(); });
+    if (btnModalPlaySegment) btnModalPlaySegment.addEventListener("click", async () => {
+        const start = Number(segModalStart.value), end = Number(segModalEnd.value);
+        if (!videoElement.src || !Number.isFinite(start) || !Number.isFinite(end) || end <= start) return showToast("ម៉ោងចាប់ផ្តើម ឬបញ្ចប់មិនត្រឹមត្រូវទេ។");
+        videoElement.currentTime = start;
+        try { await videoElement.play(); } catch (error) { showToast("មិនអាចចាក់វីដេអូបានទេ។"); return; }
+        const stopAtEnd = () => { if (videoElement.currentTime >= end) { videoElement.pause(); videoElement.removeEventListener("timeupdate", stopAtEnd); } };
+        videoElement.addEventListener("timeupdate", stopAtEnd);
+    });
+    if (btnSaveSegmentModal) btnSaveSegmentModal.addEventListener("click", () => {
+        const seg = state.segments.find(item => item.id === editingSegmentId);
+        if (!seg) return closeSegmentEditor();
+        const start = Number(segModalStart.value), end = Number(segModalEnd.value);
+        if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) return showToast("សូមបញ្ចូលម៉ោងចាប់ផ្តើម និងបញ្ចប់ឱ្យត្រឹមត្រូវ។");
+        const changed = seg.start !== start || seg.end !== end || seg.original_text !== segModalOriginal.value || seg.translated_text !== segModalTranslated.value || seg.voice_profile !== segModalVoice.value;
+        if (changed) recordUndo();
+        seg.start = Math.round(start * 100) / 100;
+        seg.end = Math.round(end * 100) / 100;
+        seg.original_text = segModalOriginal.value;
+        seg.translated_text = segModalTranslated.value;
+        seg.voice_profile = segModalVoice.value;
+        renderSegmentsTable();
+        renderTimelineTracks();
+        selectSegment(seg.id, false);
+        updateSubtitleOverlay();
+        scheduleAutosave();
+        closeSegmentEditor();
+    });
+    if (btnModalSplit) btnModalSplit.addEventListener("click", () => {
+        const seg = state.segments.find(item => item.id === editingSegmentId);
+        if (seg && splitSegmentAt(seg, videoElement.currentTime)) closeSegmentEditor();
+    });
+    if (btnModalDelete) btnModalDelete.addEventListener("click", async () => {
+        const segId = editingSegmentId;
+        if (segId == null) return closeSegmentEditor();
+        const confirmed = await showAppConfirm("លុប Segment នេះមែនទេ?", { title: "លុប Segment", confirmText: "លុប" });
+        if (confirmed) { recordUndo(); removeSegments([segId]); closeSegmentEditor(); }
+    });
+    if (btnFixDuplicateSegments) btnFixDuplicateSegments.addEventListener("click", async () => {
+        const groups = findDuplicateSegmentGroups();
+        if (!groups.length) {
+            if (duplicateSegmentStatus) duplicateSegmentStatus.textContent = "រកមិនឃើញ Segment ស្ទួនទេ";
+            showToast("រកមិនឃើញ Segment ស្ទួនដែលមានពេលត្រួតគ្នាទេ។");
+            return;
+        }
+        const duplicateCount = groups.reduce((sum, group) => sum + group.length - 1, 0);
+        const preview = groups.slice(0, 5).map(group => `#${group.map(seg => seg.id).join(" / #")} · ${formatTimeDetailed(Math.min(...group.map(seg => Number(seg.start))))}`).join("\n");
+        const more = groups.length > 5 ? `\n...និង ${groups.length - 5} ក្រុមទៀត` : "";
+        const confirmed = await showAppConfirm(`រកឃើញ ${groups.length} ក្រុម (${duplicateCount} បន្ទាត់ស្ទួន) ដែលមានអត្ថបទដូចគ្នា និងម៉ោងត្រួតគ្នា។\n\n${preview}${more}\n\nតើចង់លុបតែច្បាប់ចម្លង ហើយរក្សាទុកមួយក្នុងមួយក្រុមទេ?`, { title: "ពិនិត្យ Segment ស្ទួន", confirmText: "លុបច្បាប់ចម្លង" });
+        if (!confirmed) return;
+        const removeIds = [];
+        groups.forEach(group => {
+            group.sort((a, b) => Number(Boolean(b.audio_url)) - Number(Boolean(a.audio_url)) || Number(Boolean(b.translated_text)) - Number(Boolean(a.translated_text)) || Number(a.start) - Number(b.start));
+            removeIds.push(...group.slice(1).map(seg => seg.id));
+        });
+        recordUndo();
+        removeSegments(removeIds);
+        if (duplicateSegmentStatus) duplicateSegmentStatus.textContent = `បានលុប ${removeIds.length} ច្បាប់ចម្លង`;
+        showToast(`បានលុប Segment ស្ទួន ${removeIds.length} ហើយរក្សាទុក Segment ដើមក្នុងក្រុមនីមួយៗ។`);
+    });
+
+    function startBlockDrag(e, type, seg) {
+        e.stopPropagation();
+        e.preventDefault();
+
+        if (type === "move" && e.shiftKey) {
+            selectSegmentRange(seg.id);
+            return;
+        }
+        if (type === "move" && e.ctrlKey) {
+            const selected = new Set(state.selectedSegmentIds || []);
+            if (selected.has(seg.id)) selected.delete(seg.id);
+            else selected.add(seg.id);
+            state.selectedSegmentIds = Array.from(selected);
+            state.selectedSegmentId = seg.id;
+            state.selectionAnchorSegmentId = seg.id;
+            updateSelectionLabel();
+            highlightTableRow(seg.id);
+            renderTimelineTracks();
+            return;
+        }
+
+        if (type === "move" && !(state.selectedSegmentIds || []).includes(seg.id)) {
+            state.selectionAnchorSegmentId = seg.id;
+            selectSegment(seg.id, false);
+        } else if (type !== "move") {
+            selectSegment(seg.id, false);
+        }
+
+        const dragSegments = type === "move"
+            ? state.segments.filter(item => (state.selectedSegmentIds || []).includes(item.id))
+            : [seg];
+
+        const totalDuration = videoElement.duration || state.currentVideoDuration || (state.segments.length > 0 ? state.segments.reduce((latest, seg) => Math.max(latest, Number(seg.end) || 0), 0) : 60);
+        const wrapper = timelineContentWrapper || timelineContainer;
+        const wrapperRect = wrapper.getBoundingClientRect();
+
+        activeDrag = {
+            type, // "resize-start", "resize-end", "move"
+            seg,
+            startX: e.clientX,
+            origStart: seg.start,
+            origEnd: seg.end,
+            origDuration: seg.end - seg.start,
+            group: dragSegments.map(item => ({ seg: item, start: Number(item.start), end: Number(item.end) })),
+            totalDuration,
+            wrapperWidth: wrapperRect.width || 1,
+            moved: false
+        };
+
+    }
+
+    window.addEventListener("pointermove", (e) => {
+        if (!activeDrag) return;
+
+        const deltaX = e.clientX - activeDrag.startX;
+        if (!activeDrag.moved && Math.abs(deltaX) > 2) {
+            recordUndo();
+            activeDrag.moved = true;
+        }
+
+        const deltaTime = (deltaX / activeDrag.wrapperWidth) * activeDrag.totalDuration;
+        const seg = activeDrag.seg;
+
+        if (activeDrag.type === "resize-start") {
+            let newStart = activeDrag.origStart + deltaTime;
+            newStart = Math.max(0, Math.min(activeDrag.origEnd - 0.1, newStart));
+            newStart = Math.round(newStart * 100) / 100;
+            seg.start = newStart;
+
+            // Live video frame matching
+            if (videoElement.duration) {
+                videoElement.currentTime = newStart;
+            }
+            const startInput = document.querySelector(`input[data-field="start"][data-id="${seg.id}"]`);
+            if (startInput) startInput.value = formatSegmentTime(newStart);
+
+            updateDragBlockVisuals(seg, activeDrag.totalDuration);
+        } else if (activeDrag.type === "resize-end") {
+            let newEnd = activeDrag.origEnd + deltaTime;
+            newEnd = Math.min(activeDrag.totalDuration, Math.max(activeDrag.origStart + 0.1, newEnd));
+            newEnd = Math.round(newEnd * 100) / 100;
+            seg.end = newEnd;
+
+            // Live video frame matching
+            if (videoElement.duration) {
+                videoElement.currentTime = newEnd;
+            }
+            const endInput = document.querySelector(`input[data-field="end"][data-id="${seg.id}"]`);
+            if (endInput) endInput.value = formatSegmentTime(newEnd);
+
+            updateDragBlockVisuals(seg, activeDrag.totalDuration);
+        } else if (activeDrag.type === "move" && activeDrag.moved) {
+            const group = activeDrag.group;
+            const minStart = Math.min(...group.map(item => item.start));
+            const maxEnd = Math.max(...group.map(item => item.end));
+            const clampedDelta = Math.max(-minStart, Math.min(activeDrag.totalDuration - maxEnd, deltaTime));
+
+            group.forEach(item => {
+                item.seg.start = Math.round((item.start + clampedDelta) * 100) / 100;
+                item.seg.end = Math.round((item.end + clampedDelta) * 100) / 100;
+                const startInput = document.querySelector(`input[data-field="start"][data-id="${item.seg.id}"]`);
+                if (startInput) startInput.value = formatSegmentTime(item.seg.start);
+                const endInput = document.querySelector(`input[data-field="end"][data-id="${item.seg.id}"]`);
+                if (endInput) endInput.value = formatSegmentTime(item.seg.end);
+                updateDragBlockVisuals(item.seg, activeDrag.totalDuration);
+            });
+
+            // Live video frame matching
+            if (videoElement.duration) {
+                videoElement.currentTime = newStart;
+            }
+            const startInput = document.querySelector(`input[data-field="start"][data-id="${seg.id}"]`);
+            if (startInput) startInput.value = formatSegmentTime(newStart);
+            const endInput = document.querySelector(`input[data-field="end"][data-id="${seg.id}"]`);
+            if (endInput) endInput.value = formatSegmentTime(newEnd);
+
+            updateDragBlockVisuals(seg, activeDrag.totalDuration);
+        }
+
+        if (lblSelectedSegment) {
+            lblSelectedSegment.textContent = `#${seg.id} [${formatTimeDetailed(seg.start)} - ${formatTimeDetailed(seg.end)}]`;
+        }
+    });
+
+    window.addEventListener("pointerup", () => {
+        if (!activeDrag) return;
+        const hadMoved = activeDrag.moved;
+        activeDrag = null;
+
+        if (hadMoved) {
+            renderTimelineTracks();
+            renderSegmentsTable();
+            updateSubtitleOverlay();
+        }
+    });
+
+    function updateDragBlockVisuals(seg, totalDuration) {
+        const leftPercent = (seg.start / totalDuration) * 100;
+        const widthPercent = Math.max(0.4, ((seg.end - seg.start) / totalDuration) * 100);
+
+        document.querySelectorAll(`[data-seg-id="${seg.id}"]`).forEach(el => {
+            el.style.left = `${leftPercent}%`;
+            el.style.width = `${widthPercent}%`;
+        });
+    }
+
+    function renderTimeRuler(totalDuration) {
+        if (!timelineTimeRuler) return;
+        timelineTimeRuler.innerHTML = "";
+        const step = totalDuration > 1800 ? 120 : (totalDuration > 600 ? 60 : (totalDuration > 120 ? 15 : 5));
+        for (let t = 0; t <= totalDuration; t += step) {
+            const pct = (t / totalDuration) * 100;
+            const tick = document.createElement("div");
+            tick.className = "absolute top-0 bottom-0 flex flex-col items-center pointer-events-none select-none";
+            tick.style.left = `${pct}%`;
+            tick.innerHTML = `
+                <span class="text-[8px] font-mono text-base-500 leading-none -translate-x-1/2">${formatTime(t)}</span>
+                <div class="w-px h-1.5 bg-base-800 mt-0.5"></div>
+            `;
+            timelineTimeRuler.appendChild(tick);
+        }
+    }
+
+    function applyTimelineVerticalZoom() {
+        const scale = Math.max(1, Math.min(3, Number(state.timelineVerticalZoom) || 1));
+        const laneHeight = 28 * scale;
+        const scaledHeight = Math.ceil(24 + laneHeight * 3);
+        const contentHeight = Math.max(timelineBody?.clientHeight || 0, scaledHeight);
+        if (timelineTrackLabels) timelineTrackLabels.style.height = `${contentHeight}px`;
+        if (timelineContainer) timelineContainer.style.height = `${contentHeight}px`;
+        if (timelineContentWrapper) {
+            timelineContentWrapper.style.height = `${contentHeight}px`;
+            timelineContentWrapper.style.minHeight = `${contentHeight}px`;
+        }
+        document.querySelectorAll(".timeline-lane-label").forEach(label => {
+            label.style.height = `${laneHeight}px`;
+            label.style.fontSize = `${Math.min(18, 10 * scale)}px`;
+        });
+        [trackText, trackVoice, trackBg].filter(Boolean).forEach(track => {
+            track.style.height = `${laneHeight}px`;
+            track.style.minHeight = `${laneHeight}px`;
+        });
+        if (trackBg?.firstElementChild) trackBg.firstElementChild.style.height = `${Math.max(6, 8 * scale)}px`;
+        if (lblTimelineVerticalZoom) lblTimelineVerticalZoom.textContent = `${scale.toFixed(2).replace(/0+$/, "").replace(/\.$/, "")}x`;
+    }
+
+    function setTimelineVerticalZoom(scale) {
+        state.timelineVerticalZoom = Math.max(1, Math.min(3, Math.round(scale * 4) / 4));
+        try { localStorage.setItem("ai_dubber_timeline_vertical_zoom", String(state.timelineVerticalZoom)); } catch (error) { /* Zoom remains active for this session. */ }
+        applyTimelineVerticalZoom();
+        renderTimelineTracks();
+    }
+
+    try {
+        const savedVerticalZoom = Number(localStorage.getItem("ai_dubber_timeline_vertical_zoom"));
+        if (Number.isFinite(savedVerticalZoom) && savedVerticalZoom >= 1 && savedVerticalZoom <= 3) state.timelineVerticalZoom = savedVerticalZoom;
+    } catch (error) { /* Use the default scale if storage is unavailable. */ }
+
+    function renderTimelineTracks() {
+        const totalDuration = videoElement.duration || state.currentVideoDuration || (state.segments.length > 0 ? state.segments.reduce((latest, seg) => Math.max(latest, Number(seg.end) || 0), 0) : 60);
+
+        applyTimelineVerticalZoom();
+        if (timelineContentWrapper) {
+            timelineContentWrapper.style.width = `${state.timelineZoom * 100}%`;
+        }
+
+        renderTimeRuler(totalDuration);
+
+        trackText.innerHTML = "";
+        trackVoice.innerHTML = "";
+
+        let visibleStart = 0;
+        let visibleEnd = totalDuration;
+        if (timelineContainer && timelineContentWrapper && timelineContentWrapper.clientWidth > 0) {
+            const contentWidth = timelineContentWrapper.clientWidth;
+            const viewport = timelineContainer.clientWidth;
+            visibleStart = Math.max(0, ((timelineContainer.scrollLeft - viewport) / contentWidth) * totalDuration);
+            visibleEnd = Math.min(totalDuration, ((timelineContainer.scrollLeft + viewport * 2) / contentWidth) * totalDuration);
+        }
+        const visibleSegments = state.segments.filter(seg => Number(seg.end) >= visibleStart && Number(seg.start) <= visibleEnd);
+
+        visibleSegments.forEach(seg => {
+            const leftPercent = (seg.start / totalDuration) * 100;
+            const widthPercent = Math.max(0.4, ((seg.end - seg.start) / totalDuration) * 100);
+            const isSelected = (state.selectedSegmentIds || [state.selectedSegmentId]).includes(seg.id);
+
+            // --- Text Block ---
+            const textBlock = document.createElement("div");
+            const hasTrans = !!(seg.translated_text && seg.translated_text.trim());
+            textBlock.setAttribute("data-seg-id", seg.id);
+            textBlock.className = `absolute top-0.5 bottom-0.5 rounded ${hasTrans ? "bg-emerald-950/85 border-emerald-700/60 text-emerald-200" : "bg-base-900 border-base-750 text-base-300"} ${isSelected ? "ring-2 ring-amber-400 ring-offset-1 ring-offset-base-950 z-20 font-semibold" : "z-10"} border px-2 flex items-center text-[10px] overflow-hidden whitespace-nowrap text-ellipsis hover:brightness-125 transition cursor-grab select-none group`;
+            textBlock.style.left = `${leftPercent}%`;
+            textBlock.style.width = `${widthPercent}%`;
+            textBlock.style.fontSize = `${Math.min(18, 10 * state.timelineVerticalZoom)}px`;
+            textBlock.textContent = seg.translated_text || seg.original_text || `#${seg.id}`;
+            textBlock.title = `Segment #${seg.id} [${formatTimeDetailed(seg.start)} - ${formatTimeDetailed(seg.end)}]
+ចុចអូសដើម្បីផ្លាស់ទី ឬទាញគែមឆ្វេង/ស្តាំដើម្បីកាត់តម្រឹម`;
+
+            // Left Resize Handle
+            const leftHandle = document.createElement("div");
+            leftHandle.className = "resize-handle-left absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/50 active:bg-white/80 rounded-l transition z-30 flex items-center justify-center opacity-0 group-hover:opacity-100";
+            leftHandle.innerHTML = `<div class="w-0.5 h-3 bg-white/70 rounded"></div>`;
+            leftHandle.title = "ទាញកែប្រែពេលចាប់ផ្តើម (Trim Start)";
+            leftHandle.addEventListener("pointerdown", (e) => startBlockDrag(e, "resize-start", seg));
+            textBlock.appendChild(leftHandle);
+
+            // Right Resize Handle
+            const rightHandle = document.createElement("div");
+            rightHandle.className = "resize-handle-right absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/50 active:bg-white/80 rounded-r transition z-30 flex items-center justify-center opacity-0 group-hover:opacity-100";
+            rightHandle.innerHTML = `<div class="w-0.5 h-3 bg-white/70 rounded"></div>`;
+            rightHandle.title = "ទាញកែប្រែពេលបញ្ចប់ (Trim End)";
+            rightHandle.addEventListener("pointerdown", (e) => startBlockDrag(e, "resize-end", seg));
+            textBlock.appendChild(rightHandle);
+
+            // Move on body
+            textBlock.addEventListener("pointerdown", (e) => {
+                if (e.target === leftHandle || e.target === rightHandle) return;
+                startBlockDrag(e, "move", seg);
+            });
+            textBlock.addEventListener("dblclick", () => openSegmentEditor(seg.id));
+
+            trackText.appendChild(textBlock);
+
+            // --- Voice Block ---
+            if (seg.audio_url || (seg.status && seg.status.includes("សំឡេង"))) {
+                const voiceBlock = document.createElement("div");
+                const isFemale = seg.voice_profile === "km-KH-SreymomNeural";
+                voiceBlock.setAttribute("data-seg-id", seg.id);
+                voiceBlock.className = `absolute top-0.5 bottom-0.5 rounded ${isFemale ? "bg-pink-950/85 border-pink-700/60 text-pink-200" : "bg-blue-950/85 border-blue-700/60 text-blue-200"} ${isSelected ? "ring-2 ring-amber-400 ring-offset-1 ring-offset-base-950 z-20 font-semibold" : "z-10"} border px-2 flex items-center text-[10px] overflow-hidden whitespace-nowrap text-ellipsis hover:brightness-125 transition cursor-grab select-none group`;
+                voiceBlock.style.left = `${leftPercent}%`;
+                voiceBlock.style.width = `${widthPercent}%`;
+                voiceBlock.style.fontSize = `${Math.min(18, 10 * state.timelineVerticalZoom)}px`;
+                voiceBlock.textContent = isFemale ? "👩 Sreymom" : "👨 Piseth";
+                voiceBlock.title = `Segment #${seg.id} (${seg.voice_profile})
+[${formatTimeDetailed(seg.start)} - ${formatTimeDetailed(seg.end)}]
+ចុចអូសដើម្បីផ្លាស់ទី ឬទាញគែមឆ្វេង/ស្តាំដើម្បីកាត់តម្រឹម`;
+
+                const vLeftHandle = document.createElement("div");
+                vLeftHandle.className = "resize-handle-left absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/50 active:bg-white/80 rounded-l transition z-30 flex items-center justify-center opacity-0 group-hover:opacity-100";
+                vLeftHandle.innerHTML = `<div class="w-0.5 h-3 bg-white/70 rounded"></div>`;
+                vLeftHandle.title = "ទាញកែប្រែពេលចាប់ផ្តើម (Trim Start)";
+                vLeftHandle.addEventListener("pointerdown", (e) => startBlockDrag(e, "resize-start", seg));
+                voiceBlock.appendChild(vLeftHandle);
+
+                const vRightHandle = document.createElement("div");
+                vRightHandle.className = "resize-handle-right absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/50 active:bg-white/80 rounded-r transition z-30 flex items-center justify-center opacity-0 group-hover:opacity-100";
+                vRightHandle.innerHTML = `<div class="w-0.5 h-3 bg-white/70 rounded"></div>`;
+                vRightHandle.title = "ទាញកែប្រែពេលបញ្ចប់ (Trim End)";
+                vRightHandle.addEventListener("pointerdown", (e) => startBlockDrag(e, "resize-end", seg));
+                voiceBlock.appendChild(vRightHandle);
+
+                voiceBlock.addEventListener("pointerdown", (e) => {
+                    if (e.target === vLeftHandle || e.target === vRightHandle) return;
+                    startBlockDrag(e, "move", seg);
+                });
+
+                trackVoice.appendChild(voiceBlock);
+            }
+        });
+    }
+
+    if (timelineContainer) {
+        let timelineScrollFrame = 0;
+        timelineContainer.addEventListener("scroll", () => {
+            if (timelineScrollFrame) return;
+            timelineScrollFrame = requestAnimationFrame(() => {
+                timelineScrollFrame = 0;
+                renderTimelineTracks();
+            });
+        }, { passive: true });
+    }
+
+    // --- Quick Segment Alignment Toolbar Actions ---
+
+    function shiftSelectedSegments(offset) {
+        const ids = (state.selectedSegmentIds || []).length ? state.selectedSegmentIds : [state.selectedSegmentId].filter(id => id != null);
+        const selected = state.segments.filter(seg => ids.includes(seg.id));
+        if (!selected.length) return false;
+        const minStart = Math.min(...selected.map(seg => Number(seg.start) || 0));
+        const maxEnd = Math.max(...selected.map(seg => Number(seg.end) || 0));
+        const duration = Number(videoElement.duration || state.currentVideoDuration) || Infinity;
+        const delta = Math.max(-minStart, Math.min(duration - maxEnd, offset));
+        if (!delta) return false;
+        recordUndo();
+        selected.forEach(seg => {
+            seg.start = Math.round((Number(seg.start) + delta) * 100) / 100;
+            seg.end = Math.round((Number(seg.end) + delta) * 100) / 100;
+        });
+        renderSegmentsTable();
+        renderTimelineTracks();
+        updateSubtitleOverlay();
+        scheduleAutosave();
+        return true;
+    }
+
+    if (btnSetStartToCurrent) {
+        btnSetStartToCurrent.addEventListener("click", () => {
+            if (!state.segments.length) return;
+            const current = Math.round(videoElement.currentTime * 100) / 100;
+            let target = state.segments.find(s => s.id === state.selectedSegmentId);
+            if (!target) {
+                target = state.segments.reduce((prev, curr) => Math.abs(curr.start - current) < Math.abs(prev.start - current) ? curr : prev, state.segments[0]);
+            }
+            if (!target) return;
+            if (!state.selectedSegmentIds?.includes(target.id)) selectSegment(target.id, false);
+            const offset = current - target.start;
+            if (!shiftSelectedSegments(offset)) showToast("មិនអាចកែពេលវេលា Segment ដែលបានជ្រើសរើសបានទេ។");
+        });
+    }
+
+    if (btnSetEndToCurrent) {
+        btnSetEndToCurrent.addEventListener("click", () => {
+            if (!state.segments.length) return;
+            const current = Math.round(videoElement.currentTime * 100) / 100;
+            let target = state.segments.find(s => s.id === state.selectedSegmentId);
+            if (!target) {
+                target = state.segments.reduce((prev, curr) => Math.abs(curr.end - current) < Math.abs(prev.end - current) ? curr : prev, state.segments[0]);
+            }
+            if (!target) return;
+            if (!state.selectedSegmentIds?.includes(target.id)) selectSegment(target.id, false);
+            const offset = current - target.end;
+            if (!shiftSelectedSegments(offset)) showToast("មិនអាចកែពេលវេលា Segment ដែលបានជ្រើសរើសបានទេ។");
+        });
+    }
+
+    function nudgeSelectedSegment(delta) {
+        if (!state.segments.length) return;
+        if (!shiftSelectedSegments(delta)) showToast("សូមជ្រើសរើស Segment ដើម្បីរំកិលជាមុនសិន។");
+    }
+
+    if (btnNudgeLeft) {
+        btnNudgeLeft.addEventListener("click", () => nudgeSelectedSegment(-0.1));
+    }
+
+    if (btnNudgeRight) {
+        btnNudgeRight.addEventListener("click", () => nudgeSelectedSegment(0.1));
+    }
+
+    if (btnShiftAll) {
+        btnShiftAll.addEventListener("click", async () => {
+            if (!state.segments.length) {
+                showToast("មិនទាន់មាន Segment សម្រាប់រំកិលទេ!");
+                return;
+            }
+            const val = await showAppPrompt("បញ្ចូលចំនួនវិនាទីដែលត្រូវរំកិល Segment ទាំងអស់ស្មើគ្នា (ឧទាហរណ៍ +0.5 ដើម្បីពន្យារ ឬ -0.3 ដើម្បីរំកិលមុន):", "+0.0", { title: "រំកិល Segments", confirmText: "អនុវត្ត" });
+            if (val === null) return;
+            const offset = parseFloat(val);
+            if (isNaN(offset) || offset === 0) return;
+
+            const minStart = Math.min(...state.segments.map(seg => Number(seg.start) || 0));
+            const maxEnd = Math.max(...state.segments.map(seg => Number(seg.end) || 0));
+            const duration = Number(videoElement.duration || state.currentVideoDuration) || Infinity;
+            const appliedOffset = Math.max(-minStart, Math.min(duration - maxEnd, offset));
+            if (!appliedOffset) return;
+            recordUndo();
+            state.segments.forEach(seg => {
+                seg.start = Math.round((seg.start + appliedOffset) * 100) / 100;
+                seg.end = Math.round((seg.end + appliedOffset) * 100) / 100;
+            });
+
+            renderSegmentsTable();
+            renderTimelineTracks();
+            updateSelectionLabel();
+            updateSubtitleOverlay();
+            scheduleAutosave();
+            showToast(`បានរំកិល Segment ទាំងអស់ ${appliedOffset > 0 ? "+" + appliedOffset : appliedOffset} វិនាទីដោយជោគជ័យ!`);
+        });
+    }
+
+    // Keyboard Shortcuts for Precision Alignment
+    window.addEventListener("keydown", (e) => {
+        const activeEl = document.activeElement;
+        const isInput = activeEl && (activeEl.tagName === "INPUT" || activeEl.tagName === "TEXTAREA" || activeEl.tagName === "SELECT");
+        if ((e.ctrlKey || e.metaKey) && !isInput && e.key.toLowerCase() === "z") {
+            e.preventDefault();
+            if (e.shiftKey) redo(); else undo();
+            return;
+        }
+        if ((e.ctrlKey || e.metaKey) && !isInput && e.key.toLowerCase() === "y") {
+            e.preventDefault();
+            redo();
+            return;
+        }
+        if (e.key === "Escape" && segmentEditModal && !segmentEditModal.classList.contains("hidden")) {
+            closeSegmentEditor();
+            return;
+        }
+        if (isInput) return; // Keep native text-field shortcuts while typing
+        if (e.key === "Enter" && state.selectedSegmentId != null) {
+            e.preventDefault();
+            openSegmentEditor();
+            return;
+        }
+        if (e.key === "Delete" && state.selectedSegmentId != null) {
+            e.preventDefault();
+            btnDeleteSelected?.click();
+            return;
+        }
+        if ((e.key === "c" || e.key === "C" || e.key === "s" || e.key === "S") && state.selectedSegmentId != null) {
+            e.preventDefault();
+            btnSplitAtPlayhead?.click();
+            return;
+        }
+
+        if (e.key === "[" || e.key === "i" || e.key === "I") {
+            if (btnSetStartToCurrent) btnSetStartToCurrent.click();
+        } else if (e.key === "]" || e.key === "o" || e.key === "O") {
+            if (btnSetEndToCurrent) btnSetEndToCurrent.click();
+        } else if (e.key === "ArrowLeft" && e.altKey) {
+            e.preventDefault();
+            nudgeSelectedSegment(-0.1);
+        } else if (e.key === "ArrowRight" && e.altKey) {
+            e.preventDefault();
+            nudgeSelectedSegment(0.1);
+        } else if (e.key === " " && !e.target.matches("button")) {
+            e.preventDefault();
+            if (videoElement.paused) {
+                videoElement.play();
+            } else {
+                videoElement.pause();
+            }
+        }
+    });
+
+    function updateTimelineZoom() {
+        if (timelineContentWrapper) {
+            timelineContentWrapper.style.width = `${state.timelineZoom * 100}%`;
+        }
+        if (lblZoomLevel) {
+            lblZoomLevel.textContent = `${state.timelineZoom}x`;
+        }
+        renderTimelineTracks();
+    }
+
+    if (btnZoomIn) {
+        btnZoomIn.addEventListener("click", () => {
+            state.timelineZoom = Math.min(10, state.timelineZoom + 0.5);
+            updateTimelineZoom();
+        });
+    }
+
+    if (btnZoomOut) {
+        btnZoomOut.addEventListener("click", () => {
+            state.timelineZoom = Math.max(1, state.timelineZoom - 0.5);
+            updateTimelineZoom();
+        });
+    }
+
+    if (btnZoomFit) {
+        btnZoomFit.addEventListener("click", () => {
+            state.timelineZoom = 1;
+            updateTimelineZoom();
+            if (timelineContainer) timelineContainer.scrollLeft = 0;
+        });
+    }
+
+    if (btnTimelineVerticalZoomOut) btnTimelineVerticalZoomOut.addEventListener("click", () => setTimelineVerticalZoom(state.timelineVerticalZoom - 0.25));
+    if (btnTimelineVerticalZoomIn) btnTimelineVerticalZoomIn.addEventListener("click", () => setTimelineVerticalZoom(state.timelineVerticalZoom + 0.25));
+    if (btnTimelineVerticalZoomFit) btnTimelineVerticalZoomFit.addEventListener("click", () => setTimelineVerticalZoom(1));
+    applyTimelineVerticalZoom();
+
+    // Timeline layer visibility controls. Hidden layers keep their segment data.
+    const timelineLayerLabels = {
+        text: document.getElementById("timelineTextLabel"),
+        voice: document.getElementById("timelineVoiceLabel"),
+        background: document.getElementById("timelineBackgroundLabel")
+    };
+    let savedTimelineLayers = {};
+    try {
+        savedTimelineLayers = JSON.parse(localStorage.getItem("timeline_layer_visibility") || "{}");
+    } catch (error) {
+        savedTimelineLayers = {};
+    }
+    document.querySelectorAll("[data-timeline-layer]").forEach(button => {
+        const layer = button.dataset.timelineLayer;
+        const visible = savedTimelineLayers[layer] !== false;
+        const row = document.querySelector(`[data-timeline-layer-row="${layer}"]`);
+        const label = timelineLayerLabels[layer];
+        const setVisibility = isVisible => {
+            if (row) row.classList.toggle("hidden", !isVisible);
+            if (label) label.classList.toggle("hidden", !isVisible);
+            button.setAttribute("aria-pressed", String(isVisible));
+            button.classList.toggle("opacity-50", !isVisible);
+            savedTimelineLayers[layer] = isVisible;
+            localStorage.setItem("timeline_layer_visibility", JSON.stringify(savedTimelineLayers));
+        };
+        setVisibility(visible);
+        button.addEventListener("click", () => setVisibility(button.getAttribute("aria-pressed") !== "true"));
+    });
+
+    // Auto-load saved settings and offer recovery of the latest autosaved project.
+    loadSavedSettings();
+    restoreAutosaveIfAvailable();
+
+    if (window.lucide) {
+        lucide.createIcons();
+    }
+});
