@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # AI Movie Translator and Dubber
 
 A local-first Windows app for translating video dialogue, reviewing the translation, generating dubbed speech, and exporting a finished video. The backend uses FastAPI, faster-whisper, Gemini, edge-tts, and FFmpeg. The Angular source is in `frontend/`; its compiled interface and fallback are served from `backend/static/`.
@@ -106,3 +107,6 @@ To resume a long transcription, restore the autosaved project after restarting t
 ## Development
 
 From the project root, start the API with `cd backend` followed by `python -m uvicorn main:app --host 127.0.0.1 --port 8000 --reload`. In another terminal, run `npm start` from `frontend/` and open `http://localhost:4200`.
+=======
+# AI_DUBBER
+>>>>>>> 1cee21a0443bf008d7806f556556d12c6c6c6cc8
